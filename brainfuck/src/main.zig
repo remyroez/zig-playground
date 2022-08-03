@@ -1,14 +1,14 @@
 const std = @import("std");
 
 const Token = union(enum) {
-    moveRight,
-    moveLeft,
+    move_right,
+    move_left,
     increment,
     decrement,
     output,
     input,
-    jumpForward,
-    jumpBackward,
+    jump_forward,
+    jump_backward,
 };
 
 const Lexer = struct {
@@ -31,14 +31,14 @@ const Lexer = struct {
     fn tokenize(self: *Self, code: []const u8) anyerror!void {
         for (code) |c| {
             try switch (c) {
-                '>' => self.tokens.append(Token.moveRight),
-                '<' => self.tokens.append(Token.moveLeft),
+                '>' => self.tokens.append(Token.move_right),
+                '<' => self.tokens.append(Token.move_left),
                 '+' => self.tokens.append(Token.increment),
                 '-' => self.tokens.append(Token.decrement),
                 '.' => self.tokens.append(Token.output),
                 ',' => self.tokens.append(Token.input),
-                '[' => self.tokens.append(Token.jumpForward),
-                ']' => self.tokens.append(Token.jumpBackward),
+                '[' => self.tokens.append(Token.jump_forward),
+                ']' => self.tokens.append(Token.jump_backward),
                 else => {},
             };
         }
@@ -52,8 +52,8 @@ const Lexer = struct {
 };
 
 const Ast = union(enum) {
-    moveRight,
-    moveLeft,
+    move_right,
+    move_left,
     increment,
     decrement,
     output,
@@ -88,19 +88,19 @@ const Parser = struct {
         var i: usize = 0;
         mainLoop: while (i < tokens.len) : (i += 1) {
             switch (tokens[i]) {
-                .moveRight => try target.append(.moveRight),
-                .moveLeft => try target.append(.moveLeft),
+                .move_right => try target.append(.move_right),
+                .move_left => try target.append(.move_left),
                 .increment => try target.append(.increment),
                 .decrement => try target.append(.decrement),
                 .output => try target.append(.output),
                 .input => try target.append(.input),
-                .jumpForward => {
+                .jump_forward => {
                     var newBlock = std.ArrayList(Ast).init(self.allocator);
                     var offset = try self.parseInner(tokens[i + 1 ..], &newBlock);
                     i += offset + 1;
                     try target.append(.{ .block = newBlock });
                 },
-                .jumpBackward => {
+                .jump_backward => {
                     break :mainLoop;
                 },
             }
@@ -159,13 +159,13 @@ const Interpreter = struct {
     fn run(self: *Self, asts: []const Ast) anyerror!void {
         for (asts) |ast| {
             switch (ast) {
-                .moveRight => {
+                .move_right => {
                     self.ptr +%= 1;
                     if (self.ptr >= self.memory.items.len) {
                         try self.memory.append(0);
                     }
                 },
-                .moveLeft => {
+                .move_left => {
                     if (self.ptr == 0) return error.BfInvalidPointer;
                     self.ptr -%= 1;
                 },
@@ -218,7 +218,7 @@ pub fn main() anyerror!void {
 
     try lexer.tokenize(codeMandelbrot);
 
-    std.log.info("Token({} tokens) ----------", .{ lexer.tokens.items.len });
+    std.log.info("Token({} tokens) ----------", .{lexer.tokens.items.len});
     if (lexer.tokens.items.len <= 100) lexer.dump();
 
     var parser = Parser.init(allocator);
