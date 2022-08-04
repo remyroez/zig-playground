@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const Token = union(enum) {
+const Token = enum {
     move_right,
     move_left,
     increment,
@@ -52,13 +52,14 @@ const Lexer = struct {
 };
 
 const Ast = union(enum) {
-    move_right,
-    move_left,
-    increment,
-    decrement,
+    move_right: u8,
+    move_left: u8,
+    increment: u8,
+    decrement: u8,
     output,
     input,
-    block: std.ArrayList(Ast),
+    while_block: std.ArrayList(Ast),
+    clear,
 };
 
 const Parser = struct {
@@ -84,21 +85,90 @@ const Parser = struct {
         _ = try self.parseInner(tokens, &self.asts);
     }
 
+    fn readTokens(
+        self: *Self,
+        tokens: []const Token,
+        token: Token,
+    ) anyerror!u8 {
+        _ = self;
+        var i: u8 = 0;
+        blk: while (i < tokens.len) : (i += 1) {
+            if (tokens[i] == token) {
+                if (i == std.math.maxInt(@TypeOf(i))) {
+                    break :blk;
+                }
+            } else {
+                break :blk;
+            }
+        }
+        return i;
+    }
+
+    fn readWord(self: *Self, tokens: []const Token, word: []const Token) anyerror!usize {
+        _ = self;
+        var len = word.len;
+        return if (((len - 1) < tokens.len) and std.mem.eql(Token, tokens[0..len], word)) len else 0;
+    }
+
     fn parseInner(self: *Self, tokens: []const Token, target: *std.ArrayList(Ast)) anyerror!usize {
         var i: usize = 0;
         mainLoop: while (i < tokens.len) : (i += 1) {
+            // .clear
             switch (tokens[i]) {
-                .move_right => try target.append(.move_right),
-                .move_left => try target.append(.move_left),
-                .increment => try target.append(.increment),
-                .decrement => try target.append(.decrement),
+                .move_right => {
+                    if ((i + 1) < tokens.len) {
+                        var offset = try self.readTokens(tokens[i + 1 ..], tokens[i]);
+                        try target.append(.{ .move_right = offset + 1 });
+                        i += offset;
+                    } else {
+                        try target.append(.{ .move_right = 1 });
+                    }
+                },
+                .move_left => {
+                    if ((i + 1) < tokens.len) {
+                        var offset = try self.readTokens(tokens[i + 1 ..], tokens[i]);
+                        try target.append(.{ .move_left = offset + 1 });
+                        i += offset;
+                    } else {
+                        try target.append(.{ .move_left = 1 });
+                    }
+                },
+                .increment => {
+                    if ((i + 1) < tokens.len) {
+                        var offset = try self.readTokens(tokens[i + 1 ..], tokens[i]);
+                        try target.append(.{ .increment = offset + 1 });
+                        i += offset;
+                    } else {
+                        try target.append(.{ .increment = 1 });
+                    }
+                },
+                .decrement => {
+                    if ((i + 1) < tokens.len) {
+                        var offset = try self.readTokens(tokens[i + 1 ..], tokens[i]);
+                        try target.append(.{ .decrement = offset + 1 });
+                        i += offset;
+                    } else {
+                        try target.append(.{ .decrement = 1 });
+                    }
+                },
                 .output => try target.append(.output),
                 .input => try target.append(.input),
                 .jump_forward => {
+                    {
+                        var offset = try self.readWord(
+                            tokens[i..],
+                            &.{ .jump_forward, .decrement, .jump_backward },
+                        );
+                        if (offset > 0) {
+                            try target.append(.clear);
+                            i += offset - 1;
+                            continue;
+                        }
+                    }
                     var newBlock = std.ArrayList(Ast).init(self.allocator);
                     var offset = try self.parseInner(tokens[i + 1 ..], &newBlock);
                     i += offset + 1;
-                    try target.append(.{ .block = newBlock });
+                    try target.append(.{ .while_block = newBlock });
                 },
                 .jump_backward => {
                     break :mainLoop;
@@ -115,10 +185,10 @@ const Parser = struct {
     fn dumpAst(asts: []const Ast) void {
         for (asts) |ast| {
             switch (ast) {
-                .block => |block| {
-                    std.log.info("block - start", .{});
-                    dumpAst(block.items);
-                    std.log.info("block - end", .{});
+                .while_block => |while_block| {
+                    std.log.info("while_block - start", .{});
+                    dumpAst(while_block.items);
+                    std.log.info("while_block - end", .{});
                 },
                 else => std.log.info("{}", .{ast}),
             }
@@ -159,21 +229,21 @@ const Interpreter = struct {
     fn run(self: *Self, asts: []const Ast) anyerror!void {
         for (asts) |ast| {
             switch (ast) {
-                .move_right => {
-                    self.ptr +%= 1;
-                    if (self.ptr >= self.memory.items.len) {
+                .move_right => |n| {
+                    self.ptr +%= n;
+                    while (self.ptr >= self.memory.items.len) {
                         try self.memory.append(0);
                     }
                 },
-                .move_left => {
-                    if (self.ptr == 0) return error.BfInvalidPointer;
-                    self.ptr -%= 1;
+                .move_left => |n| {
+                    if (self.ptr < n) return error.BfInvalidPointer;
+                    self.ptr -%= n;
                 },
-                .increment => {
-                    self.memory.items[self.ptr] +%= 1;
+                .increment => |n| {
+                    self.memory.items[self.ptr] +%= n;
                 },
-                .decrement => {
-                    self.memory.items[self.ptr] -%= 1;
+                .decrement => |n| {
+                    self.memory.items[self.ptr] -%= n;
                 },
                 .output => {
                     try self.writer.print("{c}", .{self.memory.items[self.ptr]});
@@ -181,12 +251,15 @@ const Interpreter = struct {
                 .input => {
                     self.memory.items[self.ptr] = try self.reader.readByte();
                 },
-                .block => |block| {
+                .while_block => |while_block| {
                     var i: usize = 0;
                     while (self.memory.items[self.ptr] > 0) : (i +%= 1) {
                         if (i >= loopMax) return error.BfInfiniteLoop;
-                        try self.run(block.items);
+                        try self.run(while_block.items);
                     }
+                },
+                .clear => {
+                    self.memory.items[self.ptr] = 0;
                 },
             }
         }
@@ -213,13 +286,22 @@ pub fn main() anyerror!void {
     ;
     _ = codeHelloWorld;
 
+    var codeFizzBuzz =
+        \\ ++++++[->++++>>+>+>-<<<<<]>[<++++>>+++>++++>>+++>+++++>+++++>>>>>>++>>++<
+        \\ <<<<<<<<<<<<<-]<++++>+++>-->+++>->>--->++>>>+++++[->++>++<<]<<<<<<<<<<[->
+        \\ -[>>>>>>>]>[<+++>.>.>>>>..>>>+<]<<<<<-[>>>>]>[<+++++>.>.>..>>>+<]>>>>+<-[
+        \\ <<<]<[[-<<+>>]>>>+>+<<<<<<[->>+>+>-<<<<]<]>>[[-]<]>[>>>[>.<<.<<<]<[.<<<<]
+        \\ >]>.<<<<<<<<<<<]
+    ;
+    _ = codeFizzBuzz;
+
     var codeMandelbrot = @embedFile("mandelbrot.b");
     _ = codeMandelbrot;
 
     try lexer.tokenize(codeMandelbrot);
 
     std.log.info("Token({} tokens) ----------", .{lexer.tokens.items.len});
-    if (lexer.tokens.items.len <= 100) lexer.dump();
+    if (lexer.tokens.items.len <= 10) lexer.dump();
 
     var parser = Parser.init(allocator);
     defer parser.deinit();
@@ -227,7 +309,7 @@ pub fn main() anyerror!void {
     try parser.parse(lexer.tokens.items);
 
     std.log.info("AST({} asts) ----------", .{parser.asts.items.len});
-    if (parser.asts.items.len <= 100) parser.dump();
+    if (parser.asts.items.len <= 10) parser.dump();
 
     var interpreter = Interpreter.init(
         allocator,
