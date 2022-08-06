@@ -4,79 +4,29 @@ const Allocator = std.mem.Allocator;
 const String = std.ArrayList(u8);
 const AtomMap = std.StringArrayHashMap(*Atom);
 
-const Function = *const fn (*Environment, Allocator, *Atom) anyerror!*Atom;
+const sexp = @import("sexp.zig");
 
-const Environment = struct {
-    parent: ?*Environment,
-    allocator: Allocator,
-    variables: AtomMap,
+const Cell = sexp.Cell;
+const Atom = sexp.Atom;
+const Function = sexp.Function;
+const Environment = sexp.Environment;
 
-    const Self = @This();
-
-    fn init(allocator: Allocator) Self {
-        return Self{
-            .parent = null,
-            .allocator = allocator,
-            .variables = AtomMap.init(allocator),
-        };
-    }
-
-    fn deinit(self: *Self) void {
-        self.variables.clearAndFree();
-        self.variables.deinit();
-    }
-};
-
-const Cell = struct {
-    car: *Atom,
-    cdr: *Atom,
-};
-
-const Atom = union(enum) {
-    symbol: String,
-    integer: i64,
-    string: String,
-    function: Function,
-    quote: *Atom,
-    cell: Cell,
-    nil,
-
-    const Self = @This();
-
-    fn initUndefined(allocator: Allocator) !*Self {
-        return try allocator.create(Self);
-    }
-
-    fn init(allocator: Allocator, value: Atom) !*Self {
-        var atom = try initUndefined(allocator);
-        atom.* = value;
-        return atom;
-    }
-
-    fn deinit(self: *Self, allocator: Allocator, final: bool) void {
-        switch (self.*) {
-            .symbol => |symbol| symbol.deinit(),
-            .integer => {},
-            .string => |string| string.deinit(),
-            .function => {},
-            .quote => |atom| {
-                if (final) atom.deinit(allocator, true);
-            },
-            .cell => |*cell| {
-                if (!final) return;
-                cell.car.deinit(allocator, final);
-                cell.cdr.deinit(allocator, final);
-            },
-            .nil => {},
-        }
-        allocator.destroy(self);
-    }
-};
+const lexer = @import("lexer.zig");
+const Token = lexer.Token;
+const Lexer = lexer.Lexer;
 
 fn print(atom: Atom, writer: anytype) anyerror!void {
     switch (atom) {
         .symbol => |symbol| try writer.writeAll(symbol.items),
+        .boolean => |boolean| {
+            if (boolean) {
+                try writer.print("#true", .{});
+            } else {
+                try writer.print("#false", .{});
+            }
+        },
         .integer => |integer| try writer.print("{}", .{integer}),
+        .float => |float| try writer.print("{}", .{float}),
         .string => |string| {
             try writer.writeByte('"');
             for (string.items) |char| {
@@ -108,10 +58,39 @@ fn print(atom: Atom, writer: anytype) anyerror!void {
     }
 }
 
-pub fn main() anyerror!void {}
+pub fn main() anyerror!void {
+    const allocator = std.heap.page_allocator;
+
+    var lexers = Lexer.init(allocator);
+    defer lexers.deinit();
+
+    try lexers.tokenize("1.2 +3.4 -5.6 7.8+e00 9.9-e01");
+    try lexer.dump(lexers.tokens.items, std.io.getStdOut().writer());
+}
 
 test "atom test" {
     const allocator = std.testing.allocator;
+
+    var buffer = std.ArrayList(u8).init(allocator);
+    defer buffer.deinit();
+
+    var atom = try Atom.init(allocator, .{ .integer = 123 });
+    defer atom.deinit(allocator, true);
+
+    try print(atom.*, buffer.writer());
+
+    try std.testing.expect(std.mem.eql(
+        u8,
+        buffer.items,
+        "123",
+    ));
+}
+
+test "cell test" {
+    const allocator = std.testing.allocator;
+
+    var buffer = std.ArrayList(u8).init(allocator);
+    defer buffer.deinit();
 
     var car = try Atom.init(allocator, .{ .integer = 123 });
     var cdr = try Atom.init(allocator, .nil);
@@ -119,5 +98,29 @@ test "atom test" {
     var atom = try Atom.init(allocator, .{ .cell = .{ .car = car, .cdr = cdr } });
     defer atom.deinit(allocator, true);
 
-    try print(atom.*, std.io.getStdOut().writer());
+    try print(atom.*, buffer.writer());
+
+    try std.testing.expect(std.mem.eql(
+        u8,
+        buffer.items,
+        "(123 . #nil)",
+    ));
+}
+
+test "cell init test" {
+    const allocator = std.testing.allocator;
+
+    var buffer = std.ArrayList(u8).init(allocator);
+    defer buffer.deinit();
+
+    var atom = try Atom.initCell(allocator, .{ .integer = 123 }, .nil);
+    defer atom.deinit(allocator, true);
+
+    try print(atom.*, buffer.writer());
+
+    try std.testing.expect(std.mem.eql(
+        u8,
+        buffer.items,
+        "(123 . #nil)",
+    ));
 }
