@@ -3,11 +3,10 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const String = std.ArrayList(u8);
 
-const sexp = @import("sexp.zig");
-
-const Cell = sexp.Cell;
-const Atom = sexp.Atom;
-const Function = sexp.Function;
+const Cell = @import("sexp.zig").Cell;
+const Atom = @import("sexp.zig").Atom;
+const Function = @import("sexp.zig").Function;
+const cloneString = @import("sexp.zig").cloneString;
 
 const Token = @import("lexer.zig").Token;
 
@@ -29,7 +28,7 @@ pub const Parser = struct {
     }
 
     pub fn parse(self: *Self, tokens: []const Token) anyerror!void {
-        _ = try self.parseAtom(tokens, self.atom);
+        _ = try self.parseCell(tokens, self.atom);
     }
 
     fn parseAtom(self: *Self, tokens: []const Token, target: *Atom) anyerror!usize {
@@ -57,9 +56,7 @@ pub const Parser = struct {
                 .const_false => target.* = .{ .boolean = false },
                 .const_nil => target.* = .nil,
                 .identifier => |string| {
-                    var cloned = try String.initCapacity(self.allocator, string.capacity);
-                    cloned.appendSliceAssumeCapacity(string.items);
-                    target.* = .{ .symbol = cloned };
+                    target.* = .{ .symbol = try cloneString(self.allocator, string) };
                 },
                 .literal_integer => |string| {
                     target.* = .{ .integer = try std.fmt.parseInt(i64, string.items, 0) };
@@ -68,14 +65,10 @@ pub const Parser = struct {
                     target.* = .{ .float = try std.fmt.parseFloat(f64, string.items) };
                 },
                 .literal_string => |string| {
-                    var cloned = try String.initCapacity(self.allocator, string.capacity);
-                    cloned.appendSliceAssumeCapacity(string.items);
-                    target.* = .{ .string = cloned };
+                    target.* = .{ .string = try cloneString(self.allocator, string) };
                 },
                 .builtin_symbol => |string| {
-                    var cloned = try String.initCapacity(self.allocator, string.capacity);
-                    cloned.appendSliceAssumeCapacity(string.items);
-                    target.* = .{ .builtin_symbol = cloned };
+                    target.* = .{ .builtin_symbol = try cloneString(self.allocator, string) };
                 },
                 else => target.* = .nil,
             }
@@ -247,5 +240,45 @@ test "parser test: init cell atom(immediate)" {
         u8,
         buffer.items,
         "(123 . #nil)",
+    ));
+}
+
+test "parser test: parse atom" {
+    const allocator = std.testing.allocator;
+
+    var parser = try Parser.init(allocator);
+    defer parser.deinit();
+
+    try parser.parse(&.{ .const_true });
+
+    var buffer = std.ArrayList(u8).init(allocator);
+    defer buffer.deinit();
+
+    try dump(parser.atom.*, buffer.writer());
+
+    try std.testing.expect(std.mem.eql(
+        u8,
+        buffer.items,
+        "(#true . #nil)",
+    ));
+}
+
+test "parser test: parse cell" {
+    const allocator = std.testing.allocator;
+
+    var parser = try Parser.init(allocator);
+    defer parser.deinit();
+
+    try parser.parse(&.{ .left_parenthesis, .const_true, .right_parenthesis });
+
+    var buffer = std.ArrayList(u8).init(allocator);
+    defer buffer.deinit();
+
+    try dump(parser.atom.*, buffer.writer());
+
+    try std.testing.expect(std.mem.eql(
+        u8,
+        buffer.items,
+        "((#true . #nil) . #nil)",
     ));
 }

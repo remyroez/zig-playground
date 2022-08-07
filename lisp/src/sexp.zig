@@ -4,7 +4,13 @@ const Allocator = std.mem.Allocator;
 const String = std.ArrayList(u8);
 const AtomMap = std.StringArrayHashMap(*Atom);
 
-pub const Function = *const fn (*Environment, Allocator, *Atom) anyerror!*Atom;
+pub fn cloneString(allocator: Allocator, string: String) !String {
+    var cloned = try String.initCapacity(allocator, string.capacity);
+    cloned.appendSliceAssumeCapacity(string.items);
+    return cloned;
+}
+
+pub const Function = *const fn (*Environment, Allocator, Atom) anyerror!*Atom;
 
 pub const Cell = struct {
     car: *Atom,
@@ -47,6 +53,37 @@ pub const Atom = union(enum) {
             .car = try initUndefined(allocator),
             .cdr = try initUndefined(allocator),
         } });
+    }
+
+    pub fn clone(self: Self, allocator: Allocator) anyerror!*Self {
+        var new_atom = try Atom.initUndefined(allocator);
+        switch (self) {
+            .builtin_symbol => |string| {
+                new_atom.* = .{ .builtin_symbol = try cloneString(allocator, string) };
+            },
+            .symbol => |string| {
+                new_atom.* = .{ .symbol = try cloneString(allocator, string) };
+            },
+            .string => |string| {
+                new_atom.* = .{ .string = try cloneString(allocator, string) };
+            },
+            .quote => |atom| {
+                new_atom.* = .{ .quote = try atom.clone(allocator) };
+            },
+            .cell => |*cell| {
+                new_atom.* = .{ .cell = .{
+                    .car = try cell.car.clone(allocator),
+                    .cdr = try cell.cdr.clone(allocator),
+                } };
+            },
+            .boolean,
+            .integer,
+            .float,
+            .function,
+            .nil,
+            => new_atom.* = self,
+        }
+        return new_atom;
     }
 
     pub fn deinit(self: *Self, allocator: Allocator, final: bool) void {
