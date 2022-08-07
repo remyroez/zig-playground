@@ -243,7 +243,7 @@ fn expectEqualTokens(left: []const Token, right: []const Token) !void {
     }
 }
 
-test "lexer test: simple tokens" {
+test "lexer test: tokenize simple tokens" {
     const allocator = std.testing.allocator;
 
     var lexer = Lexer.init(allocator);
@@ -262,7 +262,7 @@ test "lexer test: simple tokens" {
     );
 }
 
-test "lexer test: const tokens" {
+test "lexer test: tokenize const tokens" {
     const allocator = std.testing.allocator;
 
     var lexer = Lexer.init(allocator);
@@ -280,7 +280,7 @@ test "lexer test: const tokens" {
     );
 }
 
-test "lexer test: identifier tokens" {
+test "lexer test: tokenize identifier tokens" {
     const allocator = std.testing.allocator;
 
     var lexer = Lexer.init(allocator);
@@ -303,7 +303,7 @@ test "lexer test: identifier tokens" {
     ));
 }
 
-test "lexer test: literal_integer tokens" {
+test "lexer test: tokenize literal_integer tokens" {
     const allocator = std.testing.allocator;
 
     var lexer = Lexer.init(allocator);
@@ -330,7 +330,7 @@ test "lexer test: literal_integer tokens" {
     ));
 }
 
-test "lexer test: literal_float tokens" {
+test "lexer test: tokenize literal_float tokens" {
     const allocator = std.testing.allocator;
 
     var lexer = Lexer.init(allocator);

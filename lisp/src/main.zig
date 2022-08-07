@@ -15,6 +15,9 @@ const lexer = @import("lexer.zig");
 const Token = lexer.Token;
 const Lexer = lexer.Lexer;
 
+const parser = @import("parser.zig");
+const Parser = parser.Parser;
+
 fn print(atom: Atom, writer: anytype) anyerror!void {
     switch (atom) {
         .symbol => |symbol| try writer.writeAll(symbol.items),
@@ -64,63 +67,12 @@ pub fn main() anyerror!void {
     var lexers = Lexer.init(allocator);
     defer lexers.deinit();
 
-    try lexers.tokenize("1.2 +3.4 -5.6 7.8+e00 9.9-e01");
+    try lexers.tokenize("(123 1.23 0b011 4.56e-01 \"Hello\" \",world!\")");
     try lexer.dump(lexers.tokens.items, std.io.getStdOut().writer());
-}
 
-test "atom test" {
-    const allocator = std.testing.allocator;
+    var parsers = try Parser.init(allocator);
+    defer parsers.deinit();
 
-    var buffer = std.ArrayList(u8).init(allocator);
-    defer buffer.deinit();
-
-    var atom = try Atom.init(allocator, .{ .integer = 123 });
-    defer atom.deinit(allocator, true);
-
-    try print(atom.*, buffer.writer());
-
-    try std.testing.expect(std.mem.eql(
-        u8,
-        buffer.items,
-        "123",
-    ));
-}
-
-test "cell test" {
-    const allocator = std.testing.allocator;
-
-    var buffer = std.ArrayList(u8).init(allocator);
-    defer buffer.deinit();
-
-    var car = try Atom.init(allocator, .{ .integer = 123 });
-    var cdr = try Atom.init(allocator, .nil);
-
-    var atom = try Atom.init(allocator, .{ .cell = .{ .car = car, .cdr = cdr } });
-    defer atom.deinit(allocator, true);
-
-    try print(atom.*, buffer.writer());
-
-    try std.testing.expect(std.mem.eql(
-        u8,
-        buffer.items,
-        "(123 . #nil)",
-    ));
-}
-
-test "cell init test" {
-    const allocator = std.testing.allocator;
-
-    var buffer = std.ArrayList(u8).init(allocator);
-    defer buffer.deinit();
-
-    var atom = try Atom.initCell(allocator, .{ .integer = 123 }, .nil);
-    defer atom.deinit(allocator, true);
-
-    try print(atom.*, buffer.writer());
-
-    try std.testing.expect(std.mem.eql(
-        u8,
-        buffer.items,
-        "(123 . #nil)",
-    ));
+    try parsers.parse(lexers.tokens.items);
+    try parser.dump(parsers.atom.*, std.io.getStdOut().writer());
 }

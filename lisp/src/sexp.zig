@@ -12,6 +12,7 @@ pub const Cell = struct {
 };
 
 pub const Atom = union(enum) {
+    builtin_symbol: String,
     symbol: String,
     boolean: bool,
     integer: i64,
@@ -35,11 +36,22 @@ pub const Atom = union(enum) {
     }
 
     pub fn initCell(allocator: Allocator, car: Atom, cdr: Atom) !*Self {
-        return try init(allocator, .{ .cell = .{ .car = try init(allocator, car), .cdr = try init(allocator, cdr) } });
+        return try init(allocator, .{ .cell = .{
+            .car = try init(allocator, car),
+            .cdr = try init(allocator, cdr),
+        } });
+    }
+
+    pub fn initUndefinedCell(allocator: Allocator) !*Self {
+        return try init(allocator, .{ .cell = .{
+            .car = try initUndefined(allocator),
+            .cdr = try initUndefined(allocator),
+        } });
     }
 
     pub fn deinit(self: *Self, allocator: Allocator, final: bool) void {
         switch (self.*) {
+            .builtin_symbol => |symbol| symbol.deinit(),
             .symbol => |symbol| symbol.deinit(),
             .boolean => {},
             .integer => {},
