@@ -108,6 +108,9 @@ pub const Interpreter = struct {
                     return self.evalCell(cell);
                 }
             },
+            .quote => |quoted| {
+                return quoted.clone(self.allocator);
+            },
             else => {
                 return atom.clone(self.allocator);
             },
@@ -118,7 +121,7 @@ pub const Interpreter = struct {
         var car = try self.evalAtom(cell.car.*);
         defer car.deinit(self.allocator, true);
 
-        var cdr = try cell.cdr.clone(self.allocator);
+        var cdr = try self.eval(cell.cdr.*);
         defer cdr.deinit(self.allocator, true);
 
         switch (car.*) {
@@ -131,21 +134,28 @@ pub const Interpreter = struct {
             },
             else => {
                 if (cdr.isNil()) {
-                    return try Atom.init(
-                        self.allocator,
-                        .{ .cell = .{
-                            .car = try car.clone(self.allocator),
-                            .cdr = try cdr.clone(self.allocator),
-                        } }
-                    );
+                    return try Atom.init(self.allocator, .{ .cell = .{
+                        .car = try car.clone(self.allocator),
+                        .cdr = try cdr.clone(self.allocator),
+                    } });
                 }
-            }
+            },
         }
         return error.LispEvalErrorCarIsNotFunction;
     }
 
     fn applyFunction(self: *Self, function: Function, arg: Atom) anyerror!*Atom {
-        return try @call(.{}, function.*, .{ &self.env, self.allocator, arg });
+        var result = try @call(.{}, function.*, .{ &self.env, self.allocator, arg });
+        if (self.env.hasHold()) {
+            var temp = try self.env.hold_atom.?.clone(self.allocator);
+            defer temp.deinit(self.allocator, true);
+
+            self.env.clearHold();
+
+            result.deinit(self.allocator, true);
+            result = try self.evalAtom(temp.*);
+        }
+        return result;
     }
 
     fn evalSymbol(self: *Self, symbol: String) anyerror!*Atom {
