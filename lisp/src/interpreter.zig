@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const Allocator = std.mem.Allocator;
+const String = std.ArrayList(u8);
 
 const Cell = @import("sexp.zig").Cell;
 const Atom = @import("sexp.zig").Atom;
@@ -78,25 +79,34 @@ pub const Interpreter = struct {
     pub fn eval(self: *Self, root: Atom) anyerror!*Atom {
         switch (root) {
             .cell => |cell| {
-                switch (cell.cdr.*) {
-                    .nil => {
-                        return self.evalAtom(cell.car.*);
-                    },
-                    else => {
-                        return self.evalCell(cell);
-                    },
-                }
+                return try Atom.init(
+                    self.allocator,
+                    .{ .cell = .{
+                        .car = try self.evalAtom(cell.car.*),
+                        .cdr = try self.eval(cell.cdr.*),
+                    } },
+                );
             },
             else => {
-                return root.clone(self.allocator);
+                return self.evalAtom(root);
             },
         }
     }
 
     fn evalAtom(self: *Self, atom: Atom) anyerror!*Atom {
         switch (atom) {
+            .builtin_symbol => |builtin_symbol| {
+                return self.evalBuiltinSymbol(builtin_symbol);
+            },
+            .symbol => |symbol| {
+                return self.evalSymbol(symbol);
+            },
             .cell => |cell| {
-                return self.evalCell(cell);
+                if (atom.isEmptyCell()) {
+                    return atom.clone(self.allocator);
+                } else {
+                    return self.evalCell(cell);
+                }
             },
             else => {
                 return atom.clone(self.allocator);
@@ -105,33 +115,44 @@ pub const Interpreter = struct {
     }
 
     fn evalCell(self: *Self, cell: Cell) anyerror!*Atom {
-        var temp_atom: ?*Atom = null;
-        var target_function: ?Function = null;
-        switch (cell.car.*) {
-            .function => |function| {
-                target_function = function;
-            },
-            else => {
-                temp_atom = try self.evalAtom(cell.car.*);
-                errdefer temp_atom.?.deinit(self.allocator, true);
+        var car = try self.evalAtom(cell.car.*);
+        defer car.deinit(self.allocator, true);
 
-                switch (temp_atom.?.*) {
-                    .function => |function| {
-                        target_function = function;
-                    },
-                    else => return error.LispEvalErrorCarIsNotFunction,
+        var cdr = try cell.cdr.clone(self.allocator);
+        defer cdr.deinit(self.allocator, true);
+
+        switch (car.*) {
+            .function => |function| {
+                if (cdr.isCell()) {
+                    return self.applyFunction(function, cdr.*);
+                } else {
+                    return error.LispEvalErrorCdrIsNotCell;
                 }
             },
-        }
-        if (target_function) |function| {
-            var result = self.applyFunction(function, cell.cdr.*);
-            if (temp_atom) |atom| atom.deinit(self.allocator, true);
-            return result;
+            else => {
+                if (cdr.isNil()) {
+                    return try Atom.init(
+                        self.allocator,
+                        .{ .cell = .{
+                            .car = try car.clone(self.allocator),
+                            .cdr = try cdr.clone(self.allocator),
+                        } }
+                    );
+                }
+            }
         }
         return error.LispEvalErrorCarIsNotFunction;
     }
 
     fn applyFunction(self: *Self, function: Function, arg: Atom) anyerror!*Atom {
         return try @call(.{}, function.*, .{ &self.env, self.allocator, arg });
+    }
+
+    fn evalSymbol(self: *Self, symbol: String) anyerror!*Atom {
+        return try self.env.getVar(self.allocator, symbol.items);
+    }
+
+    fn evalBuiltinSymbol(self: *Self, builtin_symbol: String) anyerror!*Atom {
+        return try self.env.getConst(self.allocator, builtin_symbol.items);
     }
 };

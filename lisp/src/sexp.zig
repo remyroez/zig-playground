@@ -4,6 +4,12 @@ const Allocator = std.mem.Allocator;
 const String = std.ArrayList(u8);
 const AtomMap = std.StringArrayHashMap(*Atom);
 
+pub fn initString(allocator: Allocator, text: []const u8) !String {
+    var string = try String.initCapacity(allocator, text.len);
+    string.appendSliceAssumeCapacity(text);
+    return string;
+}
+
 pub fn cloneString(allocator: Allocator, string: String) !String {
     var cloned = try String.initCapacity(allocator, string.capacity);
     cloned.appendSliceAssumeCapacity(string.items);
@@ -41,11 +47,19 @@ pub const Atom = union(enum) {
         return atom;
     }
 
+    pub fn initNil(allocator: Allocator) !*Self {
+        return try init(allocator, .nil);
+    }
+
     pub fn initCell(allocator: Allocator, car: Atom, cdr: Atom) !*Self {
         return try init(allocator, .{ .cell = .{
             .car = try init(allocator, car),
             .cdr = try init(allocator, cdr),
         } });
+    }
+
+    pub fn initEmptyCell(allocator: Allocator) !*Self {
+        return try initCell(allocator, .nil, .nil);
     }
 
     pub fn initUndefinedCell(allocator: Allocator) !*Self {
@@ -107,12 +121,35 @@ pub const Atom = union(enum) {
         }
         allocator.destroy(self);
     }
+
+    pub fn isNil(self: Self) bool {
+        return switch (self) {
+            .nil => true,
+            else => false,
+        };
+    }
+
+    pub fn isEmptyCell(self: Self) bool {
+        return switch (self) {
+            .cell => |cell| return cell.car.isNil() and cell.cdr.isNil(),
+            else => false,
+        };
+    }
+
+    pub fn isCell(self: Self) bool {
+        return switch (self) {
+            .cell => true,
+            .nil => true,
+            else => false,
+        };
+    }
 };
 
 pub const Environment = struct {
     parent: ?*Environment,
     allocator: Allocator,
     variables: AtomMap,
+    constants: AtomMap,
 
     const Self = @This();
 
@@ -121,11 +158,52 @@ pub const Environment = struct {
             .parent = null,
             .allocator = allocator,
             .variables = AtomMap.init(allocator),
+            .constants = AtomMap.init(allocator),
         };
     }
 
     pub fn deinit(self: *Self) void {
         self.variables.clearAndFree();
         self.variables.deinit();
+        self.constants.clearAndFree();
+        self.constants.deinit();
+    }
+
+    pub fn getVar(self: *Self, allocator: Allocator, key: []const u8) anyerror!*Atom {
+        var env = self;
+        while (true) {
+            if (env.variables.get(key)) |atom| {
+                return atom.clone(allocator);
+            }
+            if (env.parent) |parent| {
+                env = parent;
+            } else {
+                break;
+            }
+        }
+        return Atom.init(self.allocator, .nil);
+    }
+
+    pub fn getConst(self: *Self, allocator: Allocator, key: []const u8) anyerror!*Atom {
+        var env = self;
+        while (true) {
+            if (env.constants.get(key)) |atom| {
+                return atom.clone(allocator);
+            }
+            if (env.parent) |parent| {
+                env = parent;
+            } else {
+                break;
+            }
+        }
+        return Atom.init(self.allocator, .nil);
+    }
+
+    pub fn setVar(self: *Self, key: []const u8, atom: Atom) anyerror!void {
+        try self.variables.put(key, try atom.clone(self.allocator));
+    }
+
+    pub fn setConst(self: *Self, key: []const u8, atom: Atom) anyerror!void {
+        try self.constants.put(key, try atom.clone(self.allocator));
     }
 };
