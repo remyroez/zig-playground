@@ -131,35 +131,45 @@ pub const Interpreter = struct {
         defer car.deinit(self.allocator, true);
 
         switch (car.*) {
-            .function => |function| {
+            .macro => |lambda| {
                 if (cell.cdr.isCell()) {
-                    var cdr = try self.eval(cell.cdr.*);
-                    defer cdr.deinit(self.allocator, true);
+                    return self.applyLambda(lambda, cell.cdr.*);
+                } else {
+                    return error.LispEvalErrorCdrIsNotCell;
+                }
+            },
+            else => {},
+        }
+
+        var cdr = try self.eval(cell.cdr.*);
+        defer cdr.deinit(self.allocator, true);
+
+        switch (car.*) {
+            .function => |function| {
+                if (cdr.isCell()) {
                     return self.applyFunction(function, cdr.*);
                 } else {
                     return error.LispEvalErrorCdrIsNotCell;
                 }
             },
             .lambda => |lambda| {
-                if (cell.cdr.isCell()) {
-                    var cdr = try self.eval(cell.cdr.*);
-                    defer cdr.deinit(self.allocator, true);
+                if (cdr.isCell()) {
                     return self.applyLambda(lambda, cdr.*);
                 } else {
                     return error.LispEvalErrorCdrIsNotCell;
                 }
             },
             else => {
-                if (cell.cdr.isNil()) {
+                if (cdr.isNil()) {
                     return try Atom.init(self.allocator, .{ .cell = .{
                         .car = try car.clone(self.allocator),
-                        .cdr = try cell.cdr.clone(self.allocator),
+                        .cdr = try cdr.clone(self.allocator),
                     } });
                 }
             },
         }
         try printAtom(car.*);
-        try printAtom(cell.cdr.*);
+        try printAtom(cdr.*);
         return error.LispEvalErrorCarIsNotFunction;
     }
 
@@ -226,6 +236,7 @@ pub const Interpreter = struct {
                         else => return error.LispEvalErrorLambdaIsNotSymbol,
                     }
                 },
+                .nil => {},
                 else => return error.LispEvalErrorLambdaIsNotSymbol,
             }
             if (args.cell.cdr.isNil()) {
@@ -245,7 +256,14 @@ pub const Interpreter = struct {
         }
 
         try childint.env.setConst("@self", Atom{ .lambda = lambda });
-        try childint.env.setConst("@args", arg);
+
+        if (arg.isAtomCell()) {
+            var temp_args = try arg.toAtom(self.allocator);
+            defer temp_args.deinit(self.allocator, true);
+            try childint.env.setConst("@args", temp_args.*);
+        } else {
+            try childint.env.setConst("@args", arg);
+        }
 
         var result = try childint.evalAtom(lambda.body.*);
         defer result.deinit(childint.allocator, true);

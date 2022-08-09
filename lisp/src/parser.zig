@@ -94,6 +94,7 @@ pub const Parser = struct {
                     target.cell.car.* = .nil;
                     target.cell.cdr.* = .nil;
                     i += 1;
+                    return i;
                 },
                 else => i += try self.parseAtom(tokens[i..], target.cell.car),
             }
@@ -182,6 +183,14 @@ pub fn dump(atom: Atom, writer: anytype) anyerror!void {
         },
         .lambda => |lambda| {
             try writer.print("<lambda>", .{});
+            try writer.writeByte('[');
+            try dump(lambda.args.*, writer);
+            try writer.print(" => ", .{});
+            try dump(lambda.body.*, writer);
+            try writer.writeByte(']');
+        },
+        .macro => |lambda| {
+            try writer.print("<macro>", .{});
             try writer.writeByte('[');
             try dump(lambda.args.*, writer);
             try writer.print(" => ", .{});

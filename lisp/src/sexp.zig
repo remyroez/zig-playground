@@ -41,6 +41,7 @@ pub const Atom = union(enum) {
     quote: *Atom,
     cell: Cell,
     lambda: Lambda,
+    macro: Lambda,
     nil,
 
     const Self = @This();
@@ -104,6 +105,12 @@ pub const Atom = union(enum) {
                     .body = try lambda.body.clone(allocator),
                 } };
             },
+            .macro => |macro| {
+                new_atom.* = .{ .macro = .{
+                    .args = try macro.args.clone(allocator),
+                    .body = try macro.body.clone(allocator),
+                } };
+            },
             .boolean,
             .integer,
             .float,
@@ -135,6 +142,11 @@ pub const Atom = union(enum) {
                 if (!final) return;
                 lambda.args.deinit(allocator, final);
                 lambda.body.deinit(allocator, final);
+            },
+            .macro => |*macro| {
+                if (!final) return;
+                macro.args.deinit(allocator, final);
+                macro.body.deinit(allocator, final);
             },
             .nil => {},
         }
@@ -290,6 +302,12 @@ pub const Atom = union(enum) {
                 },
                 else => false,
             },
+            .macro => |self_lm| return switch (other) {
+                .macro => |other_lm| blk: {
+                    break :blk self_lm.args.eql(other_lm.args.*) and self_lm.body.eql(other_lm.body.*);
+                },
+                else => false,
+            },
             .nil => return switch (other) { .nil => true, else => false },
         };
     }
@@ -403,6 +421,14 @@ pub const Environment = struct {
         self.hold_atoms.deinit();
     }
 
+    pub fn getRoot(self: *Self) *Self {
+        return if (self.parent) |parent| parent.getRoot() else self;
+    }
+
+    pub fn getParent(self: *Self) *Self {
+        return if (self.parent) |parent| parent.? else self;
+    }
+
     fn clearVariables(self: *Self) void {
         for (self.variables.values()) |*variable| {
             variable.deinit(self.allocator);
@@ -454,6 +480,16 @@ pub const Environment = struct {
     pub fn setVar(self: *Self, key: []const u8, atom: Atom) anyerror!void {
         var new_var = try Variable.init(self.allocator, key, atom);
         try self.variables.put(new_var.name.items, new_var);
+    }
+
+    pub fn setVarRoot(self: *Self, key: []const u8, atom: Atom) anyerror!void {
+        var root = self.getRoot();
+        try root.setVar(key, atom);
+    }
+
+    pub fn setVarParent(self: *Self, key: []const u8, atom: Atom) anyerror!void {
+        var parent = self.getParent();
+        try parent.setVar(key, atom);
     }
 
     pub fn setConst(self: *Self, key: []const u8, atom: Atom) anyerror!void {

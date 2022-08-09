@@ -32,20 +32,24 @@ fn installBuiltin(it: *Interpreter) anyerror!void {
     try it.env.setConst("@or", .{ .function = &@"or" });
     try it.env.setConst("@not", .{ .function = &not });
 
-    try it.env.setConst("@atom?", .{ .function = &isAtom });
+    try it.env.setConst("@atom", .{ .function = &isAtom });
 
     try it.env.setConst("@first", .{ .function = &first });
     try it.env.setConst("@rest", .{ .function = &rest });
     try it.env.setConst("@len", .{ .function = &len });
 
+    try it.env.setConst("@quote", .{ .function = &quote });
     try it.env.setConst("@cons", .{ .function = &cons });
 
     try it.env.setConst("@if", .{ .function = &@"if" });
 
     try it.env.setConst("@eval", .{ .function = &eval });
-    try it.env.setConst("@set!", .{ .function = &setVar });
+    
+    try it.env.setConst("@def", .{ .function = &def });
+    try it.env.setConst("@set", .{ .function = &setVar });
 
     try it.env.setConst("@fn", .{ .function = &lambda });
+    try it.env.setConst("@macro", .{ .function = &macro });
 
     try it.env.setConst("@dump", .{ .function = &dump });
 }
@@ -530,6 +534,14 @@ fn len(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
     return Atom.init(alloctor, .{ .integer = @intCast(i64, args.length()) });
 }
 
+fn quote(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
+    _ = env;
+
+    if (!args.isCell()) return error.LispFuncErrorArgsIsNotCell;
+
+    return if (args.isNil()) args.clone(alloctor) else args.toAtom(alloctor);
+}
+
 fn cons(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
     _ = env;
 
@@ -577,6 +589,23 @@ fn eval(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
     return try Atom.initNil(alloctor);
 }
 
+fn def(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
+    if (!args.isCell()) return error.LispFuncErrorArgsIsNotCell;
+
+    var symbol = try args.cell.car.toAtom(alloctor);
+    defer symbol.deinit(alloctor, true);
+
+    return switch (symbol.*) {
+        .symbol => |name| blk: {
+            var cdr = try args.cell.cdr.toAtom(alloctor);
+
+            try env.setVarRoot(name.items, cdr.*);
+            break :blk cdr;
+        },
+        else => error.LispFuncErrorSetIsNotSymbol,
+    };
+}
+
 fn setVar(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
     if (!args.isCell()) return error.LispFuncErrorArgsIsNotCell;
 
@@ -607,6 +636,24 @@ fn lambda(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
     //defer cdr.deinit(alloctor, true);
 
     return try Atom.init(alloctor, .{ .lambda = .{
+        .args = car,
+        .body = cdr,
+    } });
+}
+
+fn macro(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
+    _ = env;
+
+    if (!args.isCell()) return error.LispFuncErrorArgsIsNotCell;
+
+    var car = try args.cell.car.clone(alloctor);
+    //defer car.deinit(alloctor, true);
+    if (!car.isCell()) return error.LispFuncErrorLambdaIsNotArgMap;
+
+    var cdr = try args.cell.cdr.toAtom(alloctor);
+    //defer cdr.deinit(alloctor, true);
+
+    return try Atom.init(alloctor, .{ .macro = .{
         .args = car,
         .body = cdr,
     } });
