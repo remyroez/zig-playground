@@ -130,35 +130,36 @@ pub const Interpreter = struct {
         var car = try self.evalAtom(cell.car.*);
         defer car.deinit(self.allocator, true);
 
-        var cdr = try self.eval(cell.cdr.*);
-        defer cdr.deinit(self.allocator, true);
-
         switch (car.*) {
             .function => |function| {
-                if (cdr.isCell()) {
+                if (cell.cdr.isCell()) {
+                    var cdr = try self.eval(cell.cdr.*);
+                    defer cdr.deinit(self.allocator, true);
                     return self.applyFunction(function, cdr.*);
                 } else {
                     return error.LispEvalErrorCdrIsNotCell;
                 }
             },
             .lambda => |lambda| {
-                if (cdr.isCell()) {
+                if (cell.cdr.isCell()) {
+                    var cdr = try self.eval(cell.cdr.*);
+                    defer cdr.deinit(self.allocator, true);
                     return self.applyLambda(lambda, cdr.*);
                 } else {
                     return error.LispEvalErrorCdrIsNotCell;
                 }
             },
             else => {
-                if (cdr.isNil()) {
+                if (cell.cdr.isNil()) {
                     return try Atom.init(self.allocator, .{ .cell = .{
                         .car = try car.clone(self.allocator),
-                        .cdr = try cdr.clone(self.allocator),
+                        .cdr = try cell.cdr.clone(self.allocator),
                     } });
                 }
             },
         }
         try printAtom(car.*);
-        try printAtom(cdr.*);
+        try printAtom(cell.cdr.*);
         return error.LispEvalErrorCarIsNotFunction;
     }
 
@@ -194,21 +195,50 @@ pub const Interpreter = struct {
         var childint = self.child();
         defer childint.deinit();
 
-        _ = arg;
         var args = lambda.args;
-        var value = &arg;
+        var value: ?* const Atom = if (arg.isNil()) null else &arg;
         while (true) {
             switch (args.cell.car.*) {
                 .symbol => |symbol| {
-                    try childint.env.setVar(symbol.items, value.cell.car.*);
+                    try childint.env.setVar(symbol.items, if (value) |atom| atom.cell.car.* else .nil);
+                },
+                .cell => |cell| {
+                    switch (cell.car.*) {
+                        .symbol => |symbol| {
+                            if (value) |atom| {
+                                if (atom.isAtom()) {
+                                    var cdr = try atom.toAtom(self.allocator);
+                                    defer cdr.deinit(self.allocator, true);
+                                    try childint.env.setVar(symbol.items, cdr.*);
+                                } else {
+                                    try childint.env.setVar(symbol.items, atom.cell.car.*);
+                                }
+                             } else {
+                                if (cell.cdr.isAtom()) {
+                                    var cdr = try cell.cdr.toAtom(self.allocator);
+                                    defer cdr.deinit(self.allocator, true);
+                                    try childint.env.setVar(symbol.items, cdr.*);
+                                } else {
+                                    try childint.env.setVar(symbol.items, cell.cdr.*);
+                                }
+                             }
+                        },
+                        else => return error.LispEvalErrorLambdaIsNotSymbol,
+                    }
                 },
                 else => return error.LispEvalErrorLambdaIsNotSymbol,
             }
-            if (args.cell.cdr.isNil() or value.cell.cdr.isNil()) {
+            if (args.cell.cdr.isNil()) {
                 break;
-            } else if (args.cell.cdr.isCell() and value.cell.cdr.isCell()) {
+            } else if (args.cell.cdr.isCell()) {
                 args = args.cell.cdr;
-                value = value.cell.cdr;
+                if (value != null) {
+                    if (value.?.cell.cdr.isCell() and !value.?.cell.cdr.isNil()) {
+                        value = value.?.cell.cdr;
+                    } else {
+                        value = null;
+                    }
+                }
             } else {
                 return error.LispEvalErrorLambdaMissMatchArgs;
             }

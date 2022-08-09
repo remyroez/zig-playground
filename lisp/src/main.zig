@@ -1,19 +1,6 @@
 const std = @import("std");
 
-const Allocator = std.mem.Allocator;
-
-const Lexer = @import("lexer.zig").Lexer;
-const dumpTokens = @import("lexer.zig").dump;
-
-const Parser = @import("parser.zig").Parser;
-const dumpAtom = @import("parser.zig").dump;
-
 const Interpreter = @import("interpreter.zig").Interpreter;
-
-const Atom = @import("sexp.zig").Atom;
-const Cell = @import("sexp.zig").Cell;
-const Environment = @import("sexp.zig").Environment;
-const initString = @import("sexp.zig").initString;
 
 const installBuiltins = @import("const.zig").install;
 
@@ -42,7 +29,7 @@ pub fn main() anyerror!void {
     _ = codeWhile;
 
     try interpreter.run(
-        codeWhile
+        \\((@fn '((a 100) (b 200) (c 300)) '(@dump a b c)) 1 2)
     );
 }
 

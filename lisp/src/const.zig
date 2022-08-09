@@ -85,41 +85,45 @@ fn add(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
 
     var result: Atom = .{ .integer = 0 };
 
-    var cell = &args.cell;
-    while (true) {
-        switch (cell.car.*) {
-            .integer => |integer| {
-                switch (result) {
-                    .integer => {
-                        result.integer +%= integer;
-                    },
-                    .float => {
-                        result.float += @intToFloat(f64, integer);
-                    },
-                    else => {},
-                }
-            },
-            .float => |float| {
-                switch (result) {
-                    .integer => |result_int| {
-                        result = .{ .float = @intToFloat(f64, result_int) + float };
-                    },
-                    .float => {
-                        result.float += float;
-                    },
-                    else => {},
-                }
-            },
-            else => return error.BuiltinAddErrorCarIsNotNumber,
-        }
-        if (cell.cdr.isNil()) {
-            return try Atom.init(alloctor, result);
-        } else if (cell.cdr.isCell()) {
-            cell = &cell.cdr.cell;
-        } else {
-            return error.BuiltinAddErrorCdrIsNotCellOrNil;
+    if (!args.isNil()) {
+        var cell = &args.cell;
+        while (true) {
+            switch (cell.car.*) {
+                .integer => |integer| {
+                    switch (result) {
+                        .integer => {
+                            result.integer +%= integer;
+                        },
+                        .float => {
+                            result.float += @intToFloat(f64, integer);
+                        },
+                        else => {},
+                    }
+                },
+                .float => |float| {
+                    switch (result) {
+                        .integer => |result_int| {
+                            result = .{ .float = @intToFloat(f64, result_int) + float };
+                        },
+                        .float => {
+                            result.float += float;
+                        },
+                        else => {},
+                    }
+                },
+                else => return error.BuiltinAddErrorCarIsNotNumber,
+            }
+            if (cell.cdr.isNil()) {
+                break;
+            } else if (cell.cdr.isCell()) {
+                cell = &cell.cdr.cell;
+            } else {
+                return error.BuiltinAddErrorCdrIsNotCellOrNil;
+            }
         }
     }
+
+    return Atom.init(alloctor, result);
 }
 
 fn sub(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
@@ -129,47 +133,53 @@ fn sub(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
 
     var result: Atom = .nil;
 
-    var cell = &args.cell;
-    while (true) {
-        switch (cell.car.*) {
-            .integer => |integer| {
-                switch (result) {
-                    .nil => {
-                        result = .{ .integer = integer };
-                    },
-                    .integer => {
-                        result.integer -%= integer;
-                    },
-                    .float => {
-                        result.float -= @intToFloat(f64, integer);
-                    },
-                    else => {},
-                }
-            },
-            .float => |float| {
-                switch (result) {
-                    .nil => {
-                        result = .{ .float = float };
-                    },
-                    .integer => |result_int| {
-                        result = .{ .float = @intToFloat(f64, result_int) - float };
-                    },
-                    .float => {
-                        result.float -= float;
-                    },
-                    else => {},
-                }
-            },
-            else => return error.BuiltinSubErrorCarIsNotNumber,
+    if (!args.isNil()) {
+        var cell = &args.cell;
+        while (true) {
+            switch (cell.car.*) {
+                .integer => |integer| {
+                    switch (result) {
+                        .nil => {
+                            result = .{ .integer = integer };
+                        },
+                        .integer => {
+                            result.integer -%= integer;
+                        },
+                        .float => {
+                            result.float -= @intToFloat(f64, integer);
+                        },
+                        else => {},
+                    }
+                },
+                .float => |float| {
+                    switch (result) {
+                        .nil => {
+                            result = .{ .float = float };
+                        },
+                        .integer => |result_int| {
+                            result = .{ .float = @intToFloat(f64, result_int) - float };
+                        },
+                        .float => {
+                            result.float -= float;
+                        },
+                        else => {},
+                    }
+                },
+                else => return error.BuiltinSubErrorCarIsNotNumber,
+            }
+            if (cell.cdr.isNil()) {
+                break;
+            } else if (cell.cdr.isCell()) {
+                cell = &cell.cdr.cell;
+            } else {
+                return error.BuiltinSubErrorCdrIsNotCellOrNil;
+            }
         }
-        if (cell.cdr.isNil()) {
-            return try Atom.init(alloctor, result);
-        } else if (cell.cdr.isCell()) {
-            cell = &cell.cdr.cell;
-        } else {
-            return error.BuiltinSubErrorCdrIsNotCellOrNil;
-        }
+    } else {
+        result = .{ .integer = 0 };
     }
+    
+    return Atom.init(alloctor, result);
 }
 
 fn mul(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
