@@ -141,6 +141,8 @@ pub const Interpreter = struct {
                 }
             },
         }
+        try printAtom(car.*);
+        try printAtom(cdr.*);
         return error.LispEvalErrorCarIsNotFunction;
     }
 
@@ -166,3 +168,14 @@ pub const Interpreter = struct {
         return try self.env.getConst(self.allocator, builtin_symbol.items);
     }
 };
+
+fn printAtom(atom: Atom) !void {
+    var w = std.io.getStdOut().writer();
+    const Tag = std.meta.Tag(@TypeOf(atom));
+    const atomTag = @as(Tag, atom);
+
+    try w.writeAll(@tagName(atomTag));
+    try w.writeAll(" -> ");
+    try dumpAtom(atom, w);
+    try w.writeAll("\n");
+}

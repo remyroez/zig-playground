@@ -3,6 +3,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const String = std.ArrayList(u8);
 const AtomMap = std.StringArrayHashMap(*Atom);
+const VariableMap = std.StringArrayHashMap(Variable);
 
 pub fn initString(allocator: Allocator, text: []const u8) !String {
     var string = try String.initCapacity(allocator, text.len);
@@ -263,10 +264,29 @@ pub const Atom = union(enum) {
     }
 };
 
+const Variable = struct {
+    name: String,
+    value: *Atom,
+
+    const Self = @This();
+
+    pub fn init(allocator: Allocator, name: []const u8, atom: Atom) !Self {
+        return Self{
+            .name = try initString(allocator, name),
+            .value = try atom.clone(allocator),
+        };
+    }
+
+    pub fn deinit(self: *Self, allocator: Allocator) void {
+        self.name.deinit();
+        self.value.deinit(allocator, true);
+    }
+};
+
 pub const Environment = struct {
     parent: ?*Environment,
     allocator: Allocator,
-    variables: AtomMap,
+    variables: VariableMap,
     constants: AtomMap,
     hold_atom: ?*Atom,
 
@@ -276,24 +296,35 @@ pub const Environment = struct {
         return Self{
             .parent = null,
             .allocator = allocator,
-            .variables = AtomMap.init(allocator),
+            .variables = VariableMap.init(allocator),
             .constants = AtomMap.init(allocator),
             .hold_atom = null,
         };
     }
 
     pub fn deinit(self: *Self) void {
-        self.variables.clearAndFree();
+        self.clearVariables();
         self.variables.deinit();
-        self.constants.clearAndFree();
+        self.clearConstants();
         self.constants.deinit();
+    }
+
+    fn clearVariables(self: *Self) void {
+        for (self.variables.values()) |*variable| {
+            variable.deinit(self.allocator);
+        }
+        self.variables.clearAndFree();
+    }
+
+    fn clearConstants(self: *Self) void {
+        self.constants.clearAndFree();
     }
 
     pub fn getVar(self: *Self, allocator: Allocator, key: []const u8) anyerror!*Atom {
         var env = self;
         while (true) {
-            if (env.variables.get(key)) |atom| {
-                return atom.clone(allocator);
+            if (env.variables.get(key)) |variable| {
+                return variable.value.clone(allocator);
             }
             if (env.parent) |parent| {
                 env = parent;
@@ -316,11 +347,12 @@ pub const Environment = struct {
                 break;
             }
         }
-        return Atom.init(self.allocator, .nil);
+        return error.LispEnvErrorConstNotFound;
     }
 
     pub fn setVar(self: *Self, key: []const u8, atom: Atom) anyerror!void {
-        try self.variables.put(key, try atom.clone(self.allocator));
+        var new_var = try Variable.init(self.allocator, key, atom);
+        try self.variables.put(new_var.name.items, new_var);
     }
 
     pub fn setConst(self: *Self, key: []const u8, atom: Atom) anyerror!void {

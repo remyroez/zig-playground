@@ -37,9 +37,8 @@ pub fn main() anyerror!void {
     try installBuiltins(&interpreter);
 
     try interpreter.run(
-        "(@dump (@eval (@if (@eq 100 10) '(@add 10 5) '(@sub 10 5))))",
+        "(@dump '(1 2 3 . 4))",
     );
-    //try dumpAtom(interpreter.result.?.*, std.io.getStdOut().writer());
 }
 
 test {

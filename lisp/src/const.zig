@@ -16,7 +16,7 @@ pub fn install(interpreter: *Interpreter) anyerror!void {
     try interpreter.env.setConst("@sub", .{ .function = &sub });
     try interpreter.env.setConst("@mul", .{ .function = &mul });
     try interpreter.env.setConst("@div", .{ .function = &div });
-    
+
     try interpreter.env.setConst("@eq", .{ .function = &eq });
     try interpreter.env.setConst("@atom?", .{ .function = &isAtom });
 
@@ -29,6 +29,7 @@ pub fn install(interpreter: *Interpreter) anyerror!void {
     try interpreter.env.setConst("@if", .{ .function = &@"if" });
 
     try interpreter.env.setConst("@eval", .{ .function = &eval });
+    try interpreter.env.setConst("@set!", .{ .function = &setVar });
 
     try interpreter.env.setConst("@dump", .{ .function = &dump });
 }
@@ -51,7 +52,7 @@ fn add(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
                     .float => {
                         result.float += @intToFloat(f64, integer);
                     },
-                    else => {}
+                    else => {},
                 }
             },
             .float => |float| {
@@ -62,7 +63,7 @@ fn add(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
                     .float => {
                         result.float += float;
                     },
-                    else => {}
+                    else => {},
                 }
             },
             else => return error.BuiltinAddErrorCarIsNotNumber,
@@ -98,7 +99,7 @@ fn sub(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
                     .float => {
                         result.float -= @intToFloat(f64, integer);
                     },
-                    else => {}
+                    else => {},
                 }
             },
             .float => |float| {
@@ -112,7 +113,7 @@ fn sub(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
                     .float => {
                         result.float -= float;
                     },
-                    else => {}
+                    else => {},
                 }
             },
             else => return error.BuiltinSubErrorCarIsNotNumber,
@@ -148,7 +149,7 @@ fn mul(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
                     .float => {
                         result.float *= @intToFloat(f64, integer);
                     },
-                    else => {}
+                    else => {},
                 }
             },
             .float => |float| {
@@ -162,7 +163,7 @@ fn mul(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
                     .float => {
                         result.float *= float;
                     },
-                    else => {}
+                    else => {},
                 }
             },
             else => return error.BuiltinMulErrorCarIsNotNumber,
@@ -198,7 +199,7 @@ fn div(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
                     .float => {
                         result.float /= @intToFloat(f64, integer);
                     },
-                    else => {}
+                    else => {},
                 }
             },
             .float => |float| {
@@ -212,7 +213,7 @@ fn div(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
                     .float => {
                         result.float /= float;
                     },
-                    else => {}
+                    else => {},
                 }
             },
             else => return error.BuiltinMulErrorCarIsNotNumber,
@@ -313,8 +314,6 @@ fn @"if"(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
 }
 
 fn eval(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
-    _ = env;
-
     if (!args.isCell()) return error.LispFuncErrorArgsIsNotCell;
 
     var exp = try args.cell.car.toAtom(alloctor);
@@ -325,12 +324,29 @@ fn eval(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
     return try Atom.initNil(alloctor);
 }
 
+fn setVar(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
+    if (!args.isCell()) return error.LispFuncErrorArgsIsNotCell;
+
+    var symbol = try args.cell.car.toAtom(alloctor);
+    defer symbol.deinit(alloctor, true);
+
+    return switch (symbol.*) {
+        .symbol => |name| blk: {
+            var cdr = try args.cell.cdr.toAtom(alloctor);
+
+            try env.setVar(name.items, cdr.*);
+            break :blk cdr;
+        },
+        else => error.LispFuncErrorSetIsNotSymbol,
+    };
+}
+
 fn dump(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
     _ = env;
 
     if (!args.isCell()) return error.LispFuncErrorArgsIsNotCell;
 
-    try dumpAtom(args, std.io.getStdOut().writer());
+    try dumpAtom(args.cell.car.*, std.io.getStdOut().writer());
 
     return try Atom.initNil(alloctor);
 }
