@@ -164,14 +164,20 @@ pub const Interpreter = struct {
 
     fn applyFunction(self: *Self, function: Function, arg: Atom) anyerror!*Atom {
         var result = try @call(.{}, function.*, .{ &self.env, self.allocator, arg });
-        if (self.env.hasHold()) {
-            var temp = try self.env.hold_atom.?.clone(self.allocator);
-            defer temp.deinit(self.allocator, true);
+        if (self.env.hasHolds()) {
+            var hold_atoms = try self.env.hold_atoms.clone();
+            defer {
+                for (hold_atoms.items) |atom| {
+                    atom.deinit(self.env.allocator, true);
+                }
+            }
+            self.env.hold_atoms.clearAndFree();
 
-            self.env.clearHold();
-
-            result.deinit(self.allocator, true);
-            result = try self.evalAtom(temp.*);
+            var i: usize = 0;
+            while (i < hold_atoms.items.len) : (i += 1) {
+                result.deinit(self.allocator, true);
+                result = try self.evalAtom(hold_atoms.items[i].*);
+            }
         }
         return result;
     }

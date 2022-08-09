@@ -2,6 +2,7 @@ const std = @import("std");
 
 const Allocator = std.mem.Allocator;
 const String = std.ArrayList(u8);
+const AtomList = std.ArrayList(*Atom);
 const AtomMap = std.StringArrayHashMap(*Atom);
 const VariableMap = std.StringArrayHashMap(Variable);
 
@@ -150,6 +151,13 @@ pub const Atom = union(enum) {
     pub fn isEmptyCell(self: Self) bool {
         return switch (self) {
             .cell => |cell| return cell.car.isNil() and cell.cdr.isNil(),
+            else => false,
+        };
+    }
+
+    pub fn isAtomCell(self: Self) bool {
+        return switch (self) {
+            .cell => |cell| return cell.cdr.isNil(),
             else => false,
         };
     }
@@ -360,6 +368,7 @@ pub const Environment = struct {
     variables: VariableMap,
     constants: AtomMap,
     hold_atom: ?*Atom,
+    hold_atoms: AtomList,
 
     const Self = @This();
 
@@ -370,6 +379,7 @@ pub const Environment = struct {
             .variables = VariableMap.init(allocator),
             .constants = AtomMap.init(allocator),
             .hold_atom = null,
+            .hold_atoms = AtomList.init(allocator),
         };
     }
 
@@ -380,6 +390,7 @@ pub const Environment = struct {
             .variables = VariableMap.init(self.allocator),
             .constants = AtomMap.init(self.allocator),
             .hold_atom = null,
+            .hold_atoms = AtomList.init(self.allocator),
         };
     }
 
@@ -388,6 +399,8 @@ pub const Environment = struct {
         self.variables.deinit();
         self.clearConstants();
         self.constants.deinit();
+        self.clearHoldAtoms();
+        self.hold_atoms.deinit();
     }
 
     fn clearVariables(self: *Self) void {
@@ -399,6 +412,13 @@ pub const Environment = struct {
 
     fn clearConstants(self: *Self) void {
         self.constants.clearAndFree();
+    }
+
+    fn clearHoldAtoms(self: *Self) void {
+        for (self.hold_atoms.items) |*atom| {
+            atom.*.deinit(self.allocator, true);
+        }
+        self.hold_atoms.clearAndFree();
     }
 
     pub fn getVar(self: *Self, allocator: Allocator, key: []const u8) anyerror!*Atom {
@@ -440,19 +460,11 @@ pub const Environment = struct {
         try self.constants.put(key, try atom.clone(self.allocator));
     }
 
-    pub fn clearHold(self: *Self) void {
-        if (self.hold_atom) |atom| {
-            atom.deinit(self.allocator, true);
-        }
-        self.hold_atom = null;
+    pub fn appendHold(self: *Self, atom: Atom) anyerror!void {
+        try self.hold_atoms.append(try atom.clone(self.allocator));
     }
 
-    pub fn setHold(self: *Self, atom: Atom) anyerror!void {
-        self.clearHold();
-        self.hold_atom = try atom.clone(self.allocator);
-    }
-
-    pub fn hasHold(self: Self) bool {
-        return self.hold_atom != null;
+    pub fn hasHolds(self: Self) bool {
+        return self.hold_atoms.items.len > 0;
     }
 };

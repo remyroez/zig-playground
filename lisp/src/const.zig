@@ -549,10 +549,20 @@ fn @"if"(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
 fn eval(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
     if (!args.isCell()) return error.LispFuncErrorArgsIsNotCell;
 
-    var exp = try args.cell.car.toAtom(alloctor);
-    defer exp.deinit(alloctor, true);
-
-    try env.setHold(exp.*);
+    var cell = &args.cell;
+    while (true) {
+        try env.appendHold(cell.car.*);
+        if (cell.cdr.isNil()) {
+            break;
+        } else if (cell.cdr.isAtom()) {
+            var cdr = try cell.cdr.toAtom(alloctor);
+            defer cdr.deinit(alloctor, true);
+            try env.appendHold(cdr.*);
+            break;
+        } else if (cell.cdr.isCell()) {
+            cell = &cell.cdr.cell;
+        }
+    }
 
     return try Atom.initNil(alloctor);
 }

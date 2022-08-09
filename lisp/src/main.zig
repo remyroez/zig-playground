@@ -17,15 +17,6 @@ const initString = @import("sexp.zig").initString;
 
 const installBuiltins = @import("const.zig").install;
 
-fn foo(env: *Environment, alloctor: Allocator, atom: Atom) anyerror!*Atom {
-    _ = env;
-    _ = alloctor;
-    try std.io.getStdOut().writer().print("foo: ", .{});
-    try dumpAtom(atom, std.io.getStdOut().writer());
-    try std.io.getStdOut().writer().print("\n", .{});
-    return try Atom.init(alloctor, .nil);
-}
-
 pub fn main() anyerror!void {
     const allocator = std.heap.page_allocator;
 
@@ -42,8 +33,16 @@ pub fn main() anyerror!void {
     ;
     _ = codeFib;
 
+    var codeWhile = 
+        \\(@set! 'while (@fn '(cond exp)
+        \\  '(@eval (@if (@eval cond) '(@eval exp '(@self cond exp))))
+        \\))
+        \\(while '(< 2 2) '(@dump cond))
+    ;
+    _ = codeWhile;
+
     try interpreter.run(
-        \\(@dump -0b1000_0000)
+        codeWhile
     );
 }
 
