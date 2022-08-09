@@ -31,6 +31,8 @@ pub fn install(interpreter: *Interpreter) anyerror!void {
     try interpreter.env.setConst("@eval", .{ .function = &eval });
     try interpreter.env.setConst("@set!", .{ .function = &setVar });
 
+    try interpreter.env.setConst("@fn", .{ .function = &lambda });
+
     try interpreter.env.setConst("@dump", .{ .function = &dump });
 }
 
@@ -339,6 +341,24 @@ fn setVar(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
         },
         else => error.LispFuncErrorSetIsNotSymbol,
     };
+}
+
+fn lambda(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
+    _ = env;
+
+    if (!args.isCell()) return error.LispFuncErrorArgsIsNotCell;
+
+    var car = try args.cell.car.clone(alloctor);
+    //defer car.deinit(alloctor, true);
+    if (!car.isCell()) return error.LispFuncErrorLambdaIsNotArgMap;
+
+    var cdr = try args.cell.cdr.toAtom(alloctor);
+    //defer cdr.deinit(alloctor, true);
+
+    return try Atom.init(alloctor, .{ .lambda = .{
+        .args = car,
+        .body = cdr,
+    } });
 }
 
 fn dump(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {

@@ -32,12 +32,10 @@ pub fn main() anyerror!void {
     var interpreter = Interpreter.init(allocator);
     defer interpreter.deinit();
 
-    try interpreter.env.setVar("foo", .{ .integer = 123 });
-
     try installBuiltins(&interpreter);
 
     try interpreter.run(
-        "(@dump '(1 2 3 . 4))",
+        "(@set! 'foo (@fn '(x y z) '(@add x y (@first (@rest z))))) (@dump (foo 10 5 '(100 200)))",
     );
 }
 

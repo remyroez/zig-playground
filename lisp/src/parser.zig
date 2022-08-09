@@ -180,6 +180,14 @@ pub fn dump(atom: Atom, writer: anytype) anyerror!void {
             try dump(cell.cdr.*, writer);
             try writer.writeByte(')');
         },
+        .lambda => |lambda| {
+            try writer.print("<lambda>", .{});
+            try writer.writeByte('[');
+            try dump(lambda.args.*, writer);
+            try writer.print(" => ", .{});
+            try dump(lambda.body.*, writer);
+            try writer.writeByte(']');
+        },
         .nil => {
             try writer.print("#nil", .{});
         },

@@ -24,6 +24,11 @@ pub const Cell = struct {
     cdr: *Atom,
 };
 
+pub const Lambda = struct {
+    args: *Atom,
+    body: *Atom,
+};
+
 pub const Atom = union(enum) {
     builtin_symbol: String,
     symbol: String,
@@ -34,6 +39,7 @@ pub const Atom = union(enum) {
     function: Function,
     quote: *Atom,
     cell: Cell,
+    lambda: Lambda,
     nil,
 
     const Self = @This();
@@ -85,10 +91,16 @@ pub const Atom = union(enum) {
             .quote => |atom| {
                 new_atom.* = .{ .quote = try atom.clone(allocator) };
             },
-            .cell => |*cell| {
+            .cell => |cell| {
                 new_atom.* = .{ .cell = .{
                     .car = try cell.car.clone(allocator),
                     .cdr = try cell.cdr.clone(allocator),
+                } };
+            },
+            .lambda => |lambda| {
+                new_atom.* = .{ .lambda = .{
+                    .args = try lambda.args.clone(allocator),
+                    .body = try lambda.body.clone(allocator),
                 } };
             },
             .boolean,
@@ -117,6 +129,11 @@ pub const Atom = union(enum) {
                 if (!final) return;
                 cell.car.deinit(allocator, final);
                 cell.cdr.deinit(allocator, final);
+            },
+            .lambda => |*lambda| {
+                if (!final) return;
+                lambda.args.deinit(allocator, final);
+                lambda.body.deinit(allocator, final);
             },
             .nil => {},
         }
@@ -259,6 +276,12 @@ pub const Atom = union(enum) {
                 },
                 else => false,
             },
+            .lambda => |self_lm| return switch (other) {
+                .lambda => |other_lm| blk: {
+                    break :blk self_lm.args.eql(other_lm.args.*) and self_lm.body.eql(other_lm.body.*);
+                },
+                else => false,
+            },
             .nil => return switch (other) { .nil => true, else => false },
         };
     }
@@ -298,6 +321,16 @@ pub const Environment = struct {
             .allocator = allocator,
             .variables = VariableMap.init(allocator),
             .constants = AtomMap.init(allocator),
+            .hold_atom = null,
+        };
+    }
+
+    pub fn child(self: *Self) Self {
+        return Self{
+            .parent = self,
+            .allocator = self.allocator,
+            .variables = VariableMap.init(self.allocator),
+            .constants = AtomMap.init(self.allocator),
             .hold_atom = null,
         };
     }

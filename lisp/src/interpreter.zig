@@ -6,6 +6,7 @@ const String = std.ArrayList(u8);
 const Cell = @import("sexp.zig").Cell;
 const Atom = @import("sexp.zig").Atom;
 const Function = @import("sexp.zig").Function;
+const Lambda = @import("sexp.zig").Lambda;
 const Environment = @import("sexp.zig").Environment;
 const cloneString = @import("sexp.zig").cloneString;
 
@@ -26,6 +27,14 @@ pub const Interpreter = struct {
         return Self{
             .allocator = allocator,
             .env = Environment.init(allocator),
+            .result = null,
+        };
+    }
+
+    pub fn child(self: *Self) Self {
+        return Self{
+            .allocator = self.allocator,
+            .env = self.env.child(),
             .result = null,
         };
     }
@@ -93,7 +102,7 @@ pub const Interpreter = struct {
         }
     }
 
-    fn evalAtom(self: *Self, atom: Atom) anyerror!*Atom {
+    pub fn evalAtom(self: *Self, atom: Atom) anyerror!*Atom {
         switch (atom) {
             .builtin_symbol => |builtin_symbol| {
                 return self.evalBuiltinSymbol(builtin_symbol);
@@ -132,6 +141,13 @@ pub const Interpreter = struct {
                     return error.LispEvalErrorCdrIsNotCell;
                 }
             },
+            .lambda => |lambda| {
+                if (cdr.isCell()) {
+                    return self.applyLambda(lambda, cdr.*);
+                } else {
+                    return error.LispEvalErrorCdrIsNotCell;
+                }
+            },
             else => {
                 if (cdr.isNil()) {
                     return try Atom.init(self.allocator, .{ .cell = .{
@@ -166,6 +182,36 @@ pub const Interpreter = struct {
 
     fn evalBuiltinSymbol(self: *Self, builtin_symbol: String) anyerror!*Atom {
         return try self.env.getConst(self.allocator, builtin_symbol.items);
+    }
+
+    fn applyLambda(self: *Self, lambda: Lambda, arg: Atom) anyerror!*Atom {
+        var childint = self.child();
+        defer childint.deinit();
+
+        _ = arg;
+        var args = lambda.args;
+        var value = &arg;
+        while (true) {
+            switch (args.cell.car.*) {
+                .symbol => |symbol| {
+                    try childint.env.setVar(symbol.items, value.cell.car.*);
+                },
+                else => return error.LispEvalErrorLambdaIsNotSymbol,
+            }
+            if (args.cell.cdr.isNil() or value.cell.cdr.isNil()) {
+                break;
+            } else if (args.cell.cdr.isCell() and value.cell.cdr.isCell()) {
+                args = args.cell.cdr;
+                value = value.cell.cdr;
+            } else {
+                return error.LispEvalErrorLambdaMissMatchArgs;
+            }
+        }
+
+        var result = try childint.evalAtom(lambda.body.*);
+        defer result.deinit(childint.allocator, true);
+
+        return result.clone(self.allocator);
     }
 };
 
