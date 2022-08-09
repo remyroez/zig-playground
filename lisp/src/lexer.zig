@@ -129,7 +129,7 @@ pub const Lexer = struct {
                     }
                     try buffer.append(code[i]);
                 },
-                '+', '-', 'o', 'x', 'a'...'f', 'A'...'F' => try buffer.append(code[i]),
+                '_', '+', '-', 'o', 'x', 'a'...'f', 'A'...'F' => try buffer.append(code[i]),
                 else => break,
             }
         }

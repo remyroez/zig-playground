@@ -12,32 +12,70 @@ const initString = @import("sexp.zig").initString;
 const Interpreter = @import("interpreter.zig").Interpreter;
 
 pub fn install(interpreter: *Interpreter) anyerror!void {
-    try interpreter.env.setConst("@add", .{ .function = &add });
-    try interpreter.env.setConst("@sub", .{ .function = &sub });
-    try interpreter.env.setConst("@mul", .{ .function = &mul });
-    try interpreter.env.setConst("@div", .{ .function = &div });
+    try installBuiltin(interpreter);
+    try installStandard(interpreter);
+}
 
-    try interpreter.env.setConst("@eq", .{ .function = &eq });
-    try interpreter.env.setConst("@gt", .{ .function = &gt });
-    try interpreter.env.setConst("@lt", .{ .function = &lt });
-    try interpreter.env.setConst("@and", .{ .function = &@"and" });
+fn installBuiltin(it: *Interpreter) anyerror!void {
+    try it.env.setConst("@add", .{ .function = &add });
+    try it.env.setConst("@sub", .{ .function = &sub });
+    try it.env.setConst("@mul", .{ .function = &mul });
+    try it.env.setConst("@div", .{ .function = &div });
 
-    try interpreter.env.setConst("@atom?", .{ .function = &isAtom });
+    try it.env.setConst("@eq", .{ .function = &eq });
+    try it.env.setConst("@gt", .{ .function = &gt });
+    try it.env.setConst("@lt", .{ .function = &lt });
+    try it.env.setConst("@gte", .{ .function = &gte });
+    try it.env.setConst("@lte", .{ .function = &lte });
 
-    try interpreter.env.setConst("@first", .{ .function = &first });
-    try interpreter.env.setConst("@rest", .{ .function = &rest });
-    try interpreter.env.setConst("@len", .{ .function = &len });
+    try it.env.setConst("@and", .{ .function = &@"and" });
+    try it.env.setConst("@or", .{ .function = &@"or" });
+    try it.env.setConst("@not", .{ .function = &not });
 
-    try interpreter.env.setConst("@cons", .{ .function = &cons });
+    try it.env.setConst("@atom?", .{ .function = &isAtom });
 
-    try interpreter.env.setConst("@if", .{ .function = &@"if" });
+    try it.env.setConst("@first", .{ .function = &first });
+    try it.env.setConst("@rest", .{ .function = &rest });
+    try it.env.setConst("@len", .{ .function = &len });
 
-    try interpreter.env.setConst("@eval", .{ .function = &eval });
-    try interpreter.env.setConst("@set!", .{ .function = &setVar });
+    try it.env.setConst("@cons", .{ .function = &cons });
 
-    try interpreter.env.setConst("@fn", .{ .function = &lambda });
+    try it.env.setConst("@if", .{ .function = &@"if" });
 
-    try interpreter.env.setConst("@dump", .{ .function = &dump });
+    try it.env.setConst("@eval", .{ .function = &eval });
+    try it.env.setConst("@set!", .{ .function = &setVar });
+
+    try it.env.setConst("@fn", .{ .function = &lambda });
+
+    try it.env.setConst("@dump", .{ .function = &dump });
+}
+
+fn installStandard(it: *Interpreter) anyerror!void {
+    try it.env.setVar("+", .{ .function = &add });
+    try it.env.setVar("-", .{ .function = &sub });
+    try it.env.setVar("*", .{ .function = &mul });
+    try it.env.setVar("/", .{ .function = &div });
+
+    try it.env.setVar("=", .{ .function = &eq });
+    try it.env.setVar(">", .{ .function = &gt });
+    try it.env.setVar("<", .{ .function = &lt });
+    try it.env.setVar(">=", .{ .function = &gte });
+    try it.env.setVar("<=", .{ .function = &lte });
+
+    try it.env.setVar("and", .{ .function = &@"and" });
+    try it.env.setVar("or", .{ .function = &@"or" });
+    try it.env.setVar("not", .{ .function = &not });
+
+    try it.env.setVar("atom", .{ .function = &isAtom });
+
+    try it.env.setVar("car", .{ .function = &first });
+    try it.env.setVar("cdr", .{ .function = &rest });
+    try it.env.setVar("length", .{ .function = &len });
+
+    try it.env.setVar("cons", .{ .function = &cons });
+
+    try it.env.setVar("T", .{ .boolean = true });
+    try it.env.setVar("NIL", .nil);
 }
 
 fn add(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
@@ -271,7 +309,7 @@ fn gt(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
     var target = args.cell.car;
 
     var cell = &args.cell;
-    while (true) {
+    while (result.boolean) {
         if (cell.cdr.isNil()) {
             break;
         } else if (cell.cdr.isAtom()) {
@@ -298,7 +336,7 @@ fn lt(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
     var target = args.cell.car;
 
     var cell = &args.cell;
-    while (true) {
+    while (result.boolean) {
         if (cell.cdr.isNil()) {
             break;
         } else if (cell.cdr.isAtom()) {
@@ -315,6 +353,60 @@ fn lt(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
     return try Atom.init(alloctor, result);
 }
 
+fn gte(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
+    _ = env;
+
+    if (!args.isCell()) return error.LispFuncErrorArgsIsNotCell;
+
+    var result: Atom = .{ .boolean = true };
+
+    var target = args.cell.car;
+
+    var cell = &args.cell;
+    while (result.boolean) {
+        if (cell.cdr.isNil()) {
+            break;
+        } else if (cell.cdr.isAtom()) {
+            var cdr = try cell.cdr.toAtom(alloctor);
+            defer cdr.deinit(alloctor, true);
+            result.boolean = result.boolean and ((try target.gt(cdr.*)) or target.eql(cdr.*));
+            break;
+        } else if (cell.cdr.isCell()) {
+            cell = &cell.cdr.cell;
+            result.boolean = result.boolean and ((try target.gt(cell.car.*)) or target.eql(cell.car.*));
+        }
+    }
+
+    return try Atom.init(alloctor, result);
+}
+
+fn lte(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
+    _ = env;
+
+    if (!args.isCell()) return error.LispFuncErrorArgsIsNotCell;
+
+    var result: Atom = .{ .boolean = true };
+
+    var target = args.cell.car;
+
+    var cell = &args.cell;
+    while (result.boolean) {
+        if (cell.cdr.isNil()) {
+            break;
+        } else if (cell.cdr.isAtom()) {
+            var cdr = try cell.cdr.toAtom(alloctor);
+            defer cdr.deinit(alloctor, true);
+            result.boolean = result.boolean and ((try target.lt(cdr.*)) or target.eql(cdr.*));
+            break;
+        } else if (cell.cdr.isCell()) {
+            cell = &cell.cdr.cell;
+            result.boolean = result.boolean and ((try target.lt(cell.car.*)) or target.eql(cell.car.*));
+        }
+    }
+
+    return try Atom.init(alloctor, result);
+}
+
 fn @"and"(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
     _ = env;
 
@@ -325,7 +417,7 @@ fn @"and"(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
     var result: Atom = .{ .boolean = target.isTrue() };
 
     var cell = &args.cell;
-    while (true) {
+    while (result.boolean) {
         if (cell.cdr.isNil()) {
             break;
         } else if (cell.cdr.isAtom()) {
@@ -335,9 +427,61 @@ fn @"and"(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
             break;
         } else if (cell.cdr.isCell()) {
             cell = &cell.cdr.cell;
-        } else {
-            result.boolean = result.boolean and cell.cdr.isTrue();
+            result.boolean = result.boolean and cell.car.isTrue();
+        }
+    }
+
+    return try Atom.init(alloctor, result);
+}
+
+fn @"or"(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
+    _ = env;
+
+    if (!args.isCell()) return error.LispFuncErrorArgsIsNotCell;
+
+    var target = args.cell.car;
+
+    var result: Atom = .{ .boolean = target.isTrue() };
+
+    var cell = &args.cell;
+    while (!result.boolean) {
+        if (cell.cdr.isNil()) {
             break;
+        } else if (cell.cdr.isAtom()) {
+            var cdr = try cell.cdr.toAtom(alloctor);
+            defer cdr.deinit(alloctor, true);
+            result.boolean = result.boolean or cdr.isTrue();
+            break;
+        } else if (cell.cdr.isCell()) {
+            cell = &cell.cdr.cell;
+            result.boolean = result.boolean or cell.car.isTrue();
+        }
+    }
+
+    return try Atom.init(alloctor, result);
+}
+
+fn not(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
+    _ = env;
+
+    if (!args.isCell()) return error.LispFuncErrorArgsIsNotCell;
+
+    var target = args.cell.car;
+
+    var result: Atom = .{ .boolean = !target.isTrue() };
+
+    var cell = &args.cell;
+    while (!result.boolean) {
+        if (cell.cdr.isNil()) {
+            break;
+        } else if (cell.cdr.isAtom()) {
+            var cdr = try cell.cdr.toAtom(alloctor);
+            defer cdr.deinit(alloctor, true);
+            result.boolean = result.boolean or !cdr.isTrue();
+            break;
+        } else if (cell.cdr.isCell()) {
+            cell = &cell.cdr.cell;
+            result.boolean = result.boolean or !cell.car.isTrue();
         }
     }
 
@@ -453,7 +597,22 @@ fn dump(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
 
     if (!args.isCell()) return error.LispFuncErrorArgsIsNotCell;
 
-    try dumpAtom(args.cell.car.*, std.io.getStdOut().writer());
+    var writer = std.io.getStdOut().writer();
+
+    var cell = &args.cell;
+    while (true) {
+        try dumpAtom(cell.car.*, writer);
+        if (cell.cdr.isNil()) {
+            break;
+        } else if (cell.cdr.isCell()) {
+            cell = &cell.cdr.cell;
+            try writer.writeByte(' ');
+        } else {
+            try writer.writeByte(' ');
+            try dumpAtom(cell.cdr.*, writer);
+            break;
+        }
+    }
 
     return try Atom.initNil(alloctor);
 }

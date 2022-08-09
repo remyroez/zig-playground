@@ -34,12 +34,16 @@ pub fn main() anyerror!void {
 
     try installBuiltins(&interpreter);
 
-    try interpreter.run(
+    var codeFib =
         \\(@set! 'fib (@fn '(n)
-        \\  '(@eval (@if (@lt n 2) 1 '(@add (@self (@sub n 1)) (@self (@sub n 2)))))
+        \\  '(@eval (@if (< n 2) 1 '(+ (@self (- n 1)) (@self (- n 2)))))
         \\))
         \\(@dump (fib 6))
-        ,
+    ;
+    _ = codeFib;
+
+    try interpreter.run(
+        \\(@dump -0b1000_0000)
     );
 }
 
