@@ -35,7 +35,11 @@ pub fn main() anyerror!void {
     try installBuiltins(&interpreter);
 
     try interpreter.run(
-        "(@set! 'foo (@fn '(x y z) '(@add x y (@first (@rest z))))) (@dump (foo 10 5 '(100 200)))",
+        \\(@set! 'fib (@fn '(n)
+        \\  '(@eval (@if (@lt n 2) 1 '(@add (@self (@sub n 1)) (@self (@sub n 2)))))
+        \\))
+        \\(@dump (fib 6))
+        ,
     );
 }
 

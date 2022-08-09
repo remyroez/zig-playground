@@ -208,6 +208,9 @@ pub const Interpreter = struct {
             }
         }
 
+        try childint.env.setConst("@self", Atom{ .lambda = lambda });
+        try childint.env.setConst("@args", arg);
+
         var result = try childint.evalAtom(lambda.body.*);
         defer result.deinit(childint.allocator, true);
 

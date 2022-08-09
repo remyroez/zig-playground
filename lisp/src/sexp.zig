@@ -285,6 +285,54 @@ pub const Atom = union(enum) {
             .nil => return switch (other) { .nil => true, else => false },
         };
     }
+
+    pub fn gt(self: Self, other: Self) anyerror!bool {
+        return switch (self) {
+            .integer => |self_value| return switch (other) {
+                .integer => |other_value| blk: {
+                    break :blk self_value > other_value;
+                },
+                .float => |other_value| blk: {
+                    break :blk @intToFloat(f64, self_value) > other_value;
+                },
+                else => false,
+            },
+            .float => |self_value| return switch (other) {
+                .integer => |other_value| blk: {
+                    break :blk self_value > @intToFloat(f64, other_value);
+                },
+                .float => |other_value| blk: {
+                    break :blk self_value > other_value;
+                },
+                else => false,
+            },
+            else => error.LispAtomErrorIsNotNumber,
+        };
+    }
+
+    pub fn lt(self: Self, other: Self) anyerror!bool {
+        return switch (self) {
+            .integer => |self_value| return switch (other) {
+                .integer => |other_value| blk: {
+                    break :blk self_value < other_value;
+                },
+                .float => |other_value| blk: {
+                    break :blk @intToFloat(f64, self_value) < other_value;
+                },
+                else => false,
+            },
+            .float => |self_value| return switch (other) {
+                .integer => |other_value| blk: {
+                    break :blk self_value < @intToFloat(f64, other_value);
+                },
+                .float => |other_value| blk: {
+                    break :blk self_value < other_value;
+                },
+                else => false,
+            },
+            else => error.LispAtomErrorIsNotNumber,
+        };
+    }
 };
 
 const Variable = struct {

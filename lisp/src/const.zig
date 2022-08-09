@@ -18,6 +18,10 @@ pub fn install(interpreter: *Interpreter) anyerror!void {
     try interpreter.env.setConst("@div", .{ .function = &div });
 
     try interpreter.env.setConst("@eq", .{ .function = &eq });
+    try interpreter.env.setConst("@gt", .{ .function = &gt });
+    try interpreter.env.setConst("@lt", .{ .function = &lt });
+    try interpreter.env.setConst("@and", .{ .function = &@"and" });
+
     try interpreter.env.setConst("@atom?", .{ .function = &isAtom });
 
     try interpreter.env.setConst("@first", .{ .function = &first });
@@ -250,6 +254,89 @@ fn eq(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
             cell = &cell.cdr.cell;
         } else {
             result.boolean = result.boolean and target.eql(cell.cdr.*);
+            break;
+        }
+    }
+
+    return try Atom.init(alloctor, result);
+}
+
+fn gt(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
+    _ = env;
+
+    if (!args.isCell()) return error.LispFuncErrorArgsIsNotCell;
+
+    var result: Atom = .{ .boolean = true };
+
+    var target = args.cell.car;
+
+    var cell = &args.cell;
+    while (true) {
+        if (cell.cdr.isNil()) {
+            break;
+        } else if (cell.cdr.isAtom()) {
+            var cdr = try cell.cdr.toAtom(alloctor);
+            defer cdr.deinit(alloctor, true);
+            result.boolean = result.boolean and try target.gt(cdr.*);
+            break;
+        } else if (cell.cdr.isCell()) {
+            cell = &cell.cdr.cell;
+            result.boolean = result.boolean and try target.gt(cell.car.*);
+        }
+    }
+
+    return try Atom.init(alloctor, result);
+}
+
+fn lt(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
+    _ = env;
+
+    if (!args.isCell()) return error.LispFuncErrorArgsIsNotCell;
+
+    var result: Atom = .{ .boolean = true };
+
+    var target = args.cell.car;
+
+    var cell = &args.cell;
+    while (true) {
+        if (cell.cdr.isNil()) {
+            break;
+        } else if (cell.cdr.isAtom()) {
+            var cdr = try cell.cdr.toAtom(alloctor);
+            defer cdr.deinit(alloctor, true);
+            result.boolean = result.boolean and try target.lt(cdr.*);
+            break;
+        } else if (cell.cdr.isCell()) {
+            cell = &cell.cdr.cell;
+            result.boolean = result.boolean and try target.lt(cell.car.*);
+        }
+    }
+
+    return try Atom.init(alloctor, result);
+}
+
+fn @"and"(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
+    _ = env;
+
+    if (!args.isCell()) return error.LispFuncErrorArgsIsNotCell;
+
+    var target = args.cell.car;
+
+    var result: Atom = .{ .boolean = target.isTrue() };
+
+    var cell = &args.cell;
+    while (true) {
+        if (cell.cdr.isNil()) {
+            break;
+        } else if (cell.cdr.isAtom()) {
+            var cdr = try cell.cdr.toAtom(alloctor);
+            defer cdr.deinit(alloctor, true);
+            result.boolean = result.boolean and cdr.isTrue();
+            break;
+        } else if (cell.cdr.isCell()) {
+            cell = &cell.cdr.cell;
+        } else {
+            result.boolean = result.boolean and cell.cdr.isTrue();
             break;
         }
     }
