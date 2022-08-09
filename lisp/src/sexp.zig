@@ -308,7 +308,10 @@ pub const Atom = union(enum) {
                 },
                 else => false,
             },
-            .nil => return switch (other) { .nil => true, else => false },
+            .nil => return switch (other) {
+                .nil => true,
+                else => false,
+            },
         };
     }
 

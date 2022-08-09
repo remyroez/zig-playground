@@ -160,7 +160,7 @@ pub const Lexer = struct {
                         break;
                     }
                 },
-                ' ', '\t', '\n', '\r' => break,
+                '\n', '\r' => break,
                 else => try buffer.append(code[i]),
             }
         }

@@ -20,7 +20,7 @@ pub fn main() anyerror!void {
     ;
     _ = codeFib;
 
-    var codeWhile = 
+    var codeWhile =
         \\(@set 'while (@fn '(cond exp)
         \\  '(@eval (@if (@eval cond) '(@eval exp '(@self cond exp))))
         \\))
@@ -28,33 +28,33 @@ pub fn main() anyerror!void {
     ;
     _ = codeWhile;
 
-    var codeDefaultArgs = 
+    var codeDefaultArgs =
         \\((@fn '((a 100) (b 200) (c 300)) '(@dump a b c)) 1 2)
     ;
     _ = codeDefaultArgs;
 
-    var codeMacro = 
+    var codeMacro =
         \\(@set 'macro (@macro '(args body) '(@macro args body)))
         \\(@set 'foo (macro (x y z) (+ x y z)))
         \\(@dump (foo 1 2 3))
     ;
     _ = codeMacro;
 
-    var codeDef = 
-        \\(@def 'setq (@macro '(sym value) '(@def sym (@eval value))))
-        \\(@def 'lambda (@macro '(args body) '(@fn args body)))
-        \\(@def 'defn (@macro '(sym args body) '(@def sym (@fn args body))))
+    var codeDef =
+        \\(@def 'def (@macro '(sym value) '(@def sym (@eval value))))
+        \\(def setq (@macro '(sym value) '(@def sym (@eval value))))
+        \\(def lambda (@macro '(args body) '(@fn args body)))
+        \\(def defn (@macro '(sym args body) '(@def sym (@fn args body))))
+        \\(def quote (@macro '() '(@quote @args)))
         \\(setq x '(1 2 3))
         \\(defn foo (x y z) (+ x y z))
         \\(@dump x)
         \\(@dump (foo 100 20 3))
+        \\(@dump (quote (1 2 3)))
     ;
     _ = codeDef;
 
-    try interpreter.run(
-        \\(@def 'quote (@macro '() '(@quote @args)))
-        \\(@dump (quote (1 2 3)))
-    );
+    try interpreter.run(codeDef);
 }
 
 test {

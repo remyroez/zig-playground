@@ -44,7 +44,7 @@ fn installBuiltin(it: *Interpreter) anyerror!void {
     try it.env.setConst("@if", .{ .function = &@"if" });
 
     try it.env.setConst("@eval", .{ .function = &eval });
-    
+
     try it.env.setConst("@def", .{ .function = &def });
     try it.env.setConst("@set", .{ .function = &setVar });
 
@@ -182,7 +182,7 @@ fn sub(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
     } else {
         result = .{ .integer = 0 };
     }
-    
+
     return Atom.init(alloctor, result);
 }
 

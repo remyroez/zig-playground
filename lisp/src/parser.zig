@@ -266,7 +266,7 @@ test "parser test: parse atom" {
     var parser = try Parser.init(allocator);
     defer parser.deinit();
 
-    try parser.parse(&.{ .const_true });
+    try parser.parse(&.{.const_true});
 
     var buffer = std.ArrayList(u8).init(allocator);
     defer buffer.deinit();

@@ -206,7 +206,7 @@ pub const Interpreter = struct {
         defer childint.deinit();
 
         var args = lambda.args;
-        var value: ?* const Atom = if (arg.isNil()) null else &arg;
+        var value: ?*const Atom = if (arg.isNil()) null else &arg;
         while (true) {
             switch (args.cell.car.*) {
                 .symbol => |symbol| {
@@ -223,7 +223,7 @@ pub const Interpreter = struct {
                                 } else {
                                     try childint.env.setVar(symbol.items, atom.cell.car.*);
                                 }
-                             } else {
+                            } else {
                                 if (cell.cdr.isAtom()) {
                                     var cdr = try cell.cdr.toAtom(self.allocator);
                                     defer cdr.deinit(self.allocator, true);
@@ -231,7 +231,7 @@ pub const Interpreter = struct {
                                 } else {
                                     try childint.env.setVar(symbol.items, cell.cdr.*);
                                 }
-                             }
+                            }
                         },
                         else => return error.LispEvalErrorLambdaIsNotSymbol,
                     }
