@@ -8,7 +8,7 @@ const Atom = @import("sexp.zig").Atom;
 const Function = @import("sexp.zig").Function;
 const cloneString = @import("sexp.zig").cloneString;
 
-const Token = @import("lexer.zig").Token;
+const Token = @import("lex.zig").Token;
 
 pub const Parser = struct {
     allocator: Allocator,

@@ -1,8 +1,8 @@
 const std = @import("std");
 
-const Interpreter = @import("interpreter.zig").Interpreter;
+const Interpreter = @import("eval.zig").Interpreter;
 
-const installBuiltins = @import("const.zig").install;
+const lib_builtin = @import("lib_builtin.zig");
 
 pub fn main() anyerror!void {
     const allocator = std.heap.page_allocator;
@@ -10,7 +10,7 @@ pub fn main() anyerror!void {
     var interpreter = Interpreter.init(allocator);
     defer interpreter.deinit();
 
-    try installBuiltins(&interpreter);
+    try lib_builtin.install(&interpreter);
 
     var codeFib =
         \\(@set 'fib (@fn '(n)

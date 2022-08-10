@@ -8,13 +8,12 @@ const Atom = @import("sexp.zig").Atom;
 const Function = @import("sexp.zig").Function;
 const Lambda = @import("sexp.zig").Lambda;
 const Environment = @import("sexp.zig").Environment;
-const cloneString = @import("sexp.zig").cloneString;
 
-const Lexer = @import("lexer.zig").Lexer;
-const dumpTokens = @import("lexer.zig").dump;
+const lex = @import("lex.zig");
+const Lexer = lex.Lexer;
 
-const Parser = @import("parser.zig").Parser;
-const dumpAtom = @import("parser.zig").dump;
+const parse = @import("parse.zig");
+const Parser = parse.Parser;
 
 pub const Interpreter = struct {
     allocator: Allocator,
@@ -59,7 +58,7 @@ pub const Interpreter = struct {
 
         try lexer.tokenize(code);
         if (mayber_dumper) |dumper| {
-            try dumpTokens(lexer.tokens.items, dumper);
+            try lex.dump(lexer.tokens.items, dumper);
         }
 
         var parser = try Parser.init(self.allocator);
@@ -67,14 +66,14 @@ pub const Interpreter = struct {
 
         try parser.parse(lexer.tokens.items);
         if (mayber_dumper) |dumper| {
-            try dumpAtom(parser.atom.*, dumper);
+            try parse.dump(parser.atom.*, dumper);
             try dumper.writeAll("\n");
         }
 
         var atom = try self.eval(parser.atom.*);
 
         if (mayber_dumper) |dumper| {
-            try dumpAtom(atom.*, dumper);
+            try parse.dump(atom.*, dumper);
             try dumper.writeAll("\n");
         }
 
@@ -279,6 +278,6 @@ fn printAtom(atom: Atom) !void {
 
     try w.writeAll(@tagName(atomTag));
     try w.writeAll(" -> ");
-    try dumpAtom(atom, w);
+    try parse.dump(atom, w);
     try w.writeAll("\n");
 }

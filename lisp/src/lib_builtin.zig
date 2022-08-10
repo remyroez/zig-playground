@@ -2,14 +2,14 @@ const std = @import("std");
 
 const Allocator = std.mem.Allocator;
 
-const dumpAtom = @import("parser.zig").dump;
+const parse = @import("parse.zig");
 
 const Atom = @import("sexp.zig").Atom;
 const Cell = @import("sexp.zig").Cell;
 const Environment = @import("sexp.zig").Environment;
 const initString = @import("sexp.zig").initString;
 
-const Interpreter = @import("interpreter.zig").Interpreter;
+const Interpreter = @import("eval.zig").Interpreter;
 
 pub fn install(interpreter: *Interpreter) anyerror!void {
     try installBuiltin(interpreter);
@@ -668,7 +668,7 @@ fn dump(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
 
     var cell = &args.cell;
     while (true) {
-        try dumpAtom(cell.car.*, writer);
+        try parse.dump(cell.car.*, writer);
         if (cell.cdr.isNil()) {
             break;
         } else if (cell.cdr.isCell()) {
@@ -676,7 +676,7 @@ fn dump(env: *Environment, alloctor: Allocator, args: Atom) anyerror!*Atom {
             try writer.writeByte(' ');
         } else {
             try writer.writeByte(' ');
-            try dumpAtom(cell.cdr.*, writer);
+            try parse.dump(cell.cdr.*, writer);
             break;
         }
     }
