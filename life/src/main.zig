@@ -15,7 +15,8 @@ pub fn main() anyerror!void {
 
     try game.randomize();
 
-    while (true) {
+    var wait: i32 = 0;
+    mainloop: while (true) {
         try game.update();
 
         _ = curses.c.erase();
@@ -23,7 +24,23 @@ pub fn main() anyerror!void {
         _ = curses.c.refresh();
 
         var ch = curses.c.getch();
-        if (ch == 'q') break;
+        switch (ch) {
+            'q' => break :mainloop,
+            'r' => try game.randomize(),
+            'w' => {
+                wait = 0;
+                curses.c.timeout(-1);
+            },
+            '0' => {
+                wait = 10;
+                curses.c.timeout(wait * 100);
+            },
+            '1'...'9' => {
+                wait = ch - '0';
+                curses.c.timeout(wait * 100);
+            },
+            else => {},
+        }
     }
 
     _ = curses.c.endwin();
