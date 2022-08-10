@@ -3,6 +3,13 @@ const std = @import("std");
 pub const Cell = enum {
     live,
     dead,
+
+    pub fn reverse(self: Cell) Cell {
+        return switch (self) {
+            .live => .dead,
+            .dead => .live,
+        };
+    }
 };
 
 pub const CellList = std.ArrayList(Cell);
@@ -32,6 +39,19 @@ pub const Game = struct {
 
     pub fn deinit(self: *Self) void {
         self.cells.deinit();
+    }
+
+    pub fn clear(self: *Self) !void {
+        var x: i32 = 0;
+        var y: i32 = 0;
+        while (y < self.height) : (y += 1) {
+            while (x < self.width) : (x += 1) {
+                try self.setCell(x, y, .dead);
+            } else {
+                x = 0;
+            }
+        }
+        self.flush();
     }
 
     pub fn randomize(self: *Self) !void {
@@ -90,6 +110,12 @@ pub const Game = struct {
 
     pub fn getCell(self: Self, x: i32, y: i32) !Cell {
         return self.cells.items[try self.toIndex(x, y)];
+    }
+
+    pub fn toggleCell(self: *Self, x: i32, y: i32) !void {
+        var cell = (try self.getCell(x, y)).reverse();
+        self.cells.items[try self.toIndex(x, y)] = cell;
+        self.next_cells.items[try self.toIndex(x, y)] = cell;
     }
 
     fn setCell(self: *Self, x: i32, y: i32, cell: Cell) !void {
