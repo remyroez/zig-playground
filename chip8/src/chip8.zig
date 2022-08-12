@@ -1,6 +1,9 @@
 const std = @import("std");
 
 pub const Machine = struct {
+    const width = 64;
+    const height = 32;
+
     ram: [4096]u8 = undefined,
     v: [16]u8 = undefined,
     i: u16 = 0,
@@ -9,7 +12,7 @@ pub const Machine = struct {
     pc: u16 = 0,
     sp: u8 = 0,
     stack: [16]u16 = undefined,
-    vram: [64 * 32]u8 = undefined,
+    vram: [width * height]u8 = undefined,
     keys: [16]u8 = undefined,
     rand: std.rand.DefaultPrng = undefined,
     pause: bool = false,
@@ -49,6 +52,11 @@ pub const Machine = struct {
         );
     }
 
+    pub fn load(self: *Self, data: []const u8) void {
+        std.mem.set(u8, self.ram[0x200..], 0);
+        std.mem.copy(u8, self.ram[0x200..], data);
+    }
+
     const Key = enum(u8) {
         n0,
         n1,
@@ -72,39 +80,43 @@ pub const Machine = struct {
         self.keys[@enumToInt(key)] = if (input) 1 else 0;
     }
 
+    fn clearKeys(self: *Self) void {
+        std.mem.set(u8, self.keys[0..], 0);
+    }
+
     const Opcode = struct {
         value: u16,
 
         pub fn init(hi: u8, lo: u8) Opcode {
-            return .{ .value = hi << 8 | lo };
+            return .{ .value = @intCast(u16, hi) << 8 | lo };
         }
 
-        pub fn at(self: Self, pos: u2) u8 {
-            var shift = pos * 4;
-            return @intCast(u8, (self.value & (0xF << shift)) >> shift);
+        pub fn at(self: Opcode, pos: u2) u8 {
+            var shift = @intCast(u4, pos) * 4;
+            return @intCast(u8, (self.value & (@as(u16, 0xF) << shift)) >> shift);
         }
 
-        pub fn low(self: Self) u8 {
+        pub fn low(self: Opcode) u8 {
             return @intCast(u8, self.value & 0x00FF);
         }
 
-        pub fn x(self: Self) u8 {
+        pub fn x(self: Opcode) u8 {
             return self.at(2);
         }
 
-        pub fn y(self: Self) u8 {
+        pub fn y(self: Opcode) u8 {
             return self.at(1);
         }
 
-        pub fn n(self: Self) u8 {
+        pub fn n(self: Opcode) u8 {
             return self.at(0);
         }
 
-        pub fn nnn(self: Self) u16 {
+        pub fn nnn(self: Opcode) u16 {
             return self.value & 0x0FFF;
         }
 
-        pub fn kk(self: Self) u8 {
+        pub fn kk(self: Opcode) u8 {
             return self.low();
         }
     };
@@ -114,11 +126,14 @@ pub const Machine = struct {
 
         var opcode = Opcode.init(self.ram[self.pc], self.ram[self.pc + 1]);
 
+        std.log.info("{x}: {x}", .{self.pc, opcode.value});
+
         switch (opcode.at(3)) {
             0x0 => {
                 switch (opcode.value & 0x00FF) {
                     0xE0 => self.op00E0(),
                     0xEE => self.op00EE(),
+                    else => {},
                 }
             },
             0x1 => self.op1nnn(opcode.nnn()),
@@ -138,7 +153,8 @@ pub const Machine = struct {
                     0x5 => self.op8xy5(opcode.x(), opcode.y()),
                     0x6 => self.op8xy6(opcode.x(), opcode.y()),
                     0x7 => self.op8xy7(opcode.x(), opcode.y()),
-                    0x6 => self.op8xy6(opcode.x(), opcode.y()),
+                    0xE => self.op8xyE(opcode.x(), opcode.y()),
+                    else => {},
                 }
             },
             0x9 => self.op9xy0(opcode.x(), opcode.y()),
@@ -150,6 +166,7 @@ pub const Machine = struct {
                 switch (opcode.low()) {
                     0x9E => self.opEx9E(opcode.x()),
                     0xA1 => self.opExA1(opcode.x()),
+                    else => {},
                 }
             },
             0xF => {
@@ -163,6 +180,7 @@ pub const Machine = struct {
                     0x33 => self.opFx33(opcode.x()),
                     0x55 => self.opFx55(opcode.x()),
                     0x65 => self.opFx65(opcode.x()),
+                    else => {},
                 }
             },
             else => {
@@ -174,6 +192,8 @@ pub const Machine = struct {
             if (self.delay > 0) self.delay -|= 1;
             if (self.sound > 0) self.sound -|= 1;
         }
+
+        self.clearKeys();
     }
 
     // 00E0 - CLS
@@ -183,13 +203,15 @@ pub const Machine = struct {
 
     // 00EE - RET
     fn op00EE(self: *Self) void {
-        self.pc = self.stack[self.sp];
         self.sp -|= 1;
+        self.pc = self.stack[self.sp];
+        self.pc -|= 2;
     }
 
     // 1nnn - JP addr
     fn op1nnn(self: *Self, nnn: u16) void {
         self.pc = nnn;
+        self.pc -|= 2;
     }
 
     // 2nnn - CALL addr
@@ -197,6 +219,7 @@ pub const Machine = struct {
         self.stack[self.sp] = self.pc;
         self.sp += 1;
         self.pc = nnn;
+        self.pc -|= 2;
     }
 
     // 3xkk - SE Vx, byte
@@ -298,10 +321,23 @@ pub const Machine = struct {
 
     // Dxyn - DRW Vx, Vy, nibble
     fn opDxyn(self: *Self, x: u8, y: u8, n: u8) void {
-        _ = self;
-        _ = x;
-        _ = y;
-        _ = n;
+        var locx = @intCast(usize, self.v[x]);
+        var locy = @intCast(usize, self.v[y]);
+        var i: u8 = 0;
+        self.v[0xf] = 0;
+        while (i < n) : (i += 1) {
+            var byte = self.ram[self.i + i];
+            var j: u8 = 0;
+            while (j < 8) : (j +|= 1) {
+                if ((byte & (@as(u8, 0x80) >> @intCast(u3, j))) != 0) {
+                    var index = (locy + i) * width + (locx + j);
+                    if (self.vram[index] != 0) {
+                        self.v[0xf] = 1;
+                    }
+                    self.vram[index] ^= 1;
+                }
+            }
+        }
     }
 
     // Ex9E - SKP Vx
@@ -324,7 +360,7 @@ pub const Machine = struct {
         self.pause = true;
         for (self.keys) |k, i| {
             if (k != 0) {
-                self.v[x] = i;
+                self.v[x] = @intCast(u8, i);
                 self.pause = false;
             }
         }

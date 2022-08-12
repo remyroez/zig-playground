@@ -292,6 +292,21 @@ pub const Rect = struct {
     }
 };
 
+pub const Keyboard = struct {
+    state: [*c]const u8 = null,
+    len: c_int = 0,
+
+    const Self = @This();
+
+    pub fn flush(self: *Self) void {
+        self.state = c.SDL_GetKeyboardState(&self.len);
+    }
+
+    pub fn get(self: Self, index: c_int) bool {
+        return if (self.state != null and index >= 0 and index < self.len) self.state.?[@intCast(usize, index)] > 0 else false;
+    }
+};
+
 pub fn delay(ms: u32) void {
     c.SDL_Delay(ms);
 }

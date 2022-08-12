@@ -25,15 +25,15 @@ pub fn main() anyerror!void {
 
     var screen_size = sdl.Size{ .w = 64, .h = 32 };
 
-    renderer.setTarget(screen);
-    renderer.setDrawColor(sdl.Color.red);
-    renderer.clear();
-    renderer.resetTarget();
-
     //var dstrect = sdl.c.SDL_Rect{ .x = 0, .y = 0, .w = 64, .h = 32 };
 
     var machine: chip8.Machine = .{};
     machine.init();
+
+    var code = @embedFile("roms/demos/Particle Demo [zeroZshadow, 2008].ch8");
+    machine.load(code);
+
+    var keyboard = sdl.Keyboard{};
 
     mainloop: while (true) {
         while (sdl.pollEvent()) |event| {
@@ -45,8 +45,30 @@ pub fn main() anyerror!void {
             }
         }
 
+        keyboard.flush();
+        machine.setKey(.n1, keyboard.get(sdl.c.SDL_SCANCODE_1));
+        machine.setKey(.n2, keyboard.get(sdl.c.SDL_SCANCODE_2));
+        machine.setKey(.n3, keyboard.get(sdl.c.SDL_SCANCODE_3));
+        machine.setKey(.n4, keyboard.get(sdl.c.SDL_SCANCODE_Q));
+        machine.setKey(.n5, keyboard.get(sdl.c.SDL_SCANCODE_W));
+        machine.setKey(.n6, keyboard.get(sdl.c.SDL_SCANCODE_E));
+        machine.setKey(.n7, keyboard.get(sdl.c.SDL_SCANCODE_A));
+        machine.setKey(.n8, keyboard.get(sdl.c.SDL_SCANCODE_S));
+        machine.setKey(.n9, keyboard.get(sdl.c.SDL_SCANCODE_D));
+        machine.setKey(.a, keyboard.get(sdl.c.SDL_SCANCODE_Z));
+        machine.setKey(.n0, keyboard.get(sdl.c.SDL_SCANCODE_X));
+        machine.setKey(.b, keyboard.get(sdl.c.SDL_SCANCODE_C));
+        machine.setKey(.c, keyboard.get(sdl.c.SDL_SCANCODE_4));
+        machine.setKey(.d, keyboard.get(sdl.c.SDL_SCANCODE_R));
+        machine.setKey(.e, keyboard.get(sdl.c.SDL_SCANCODE_F));
+        machine.setKey(.f, keyboard.get(sdl.c.SDL_SCANCODE_V));
+
+        machine.cycle();
+
         renderer.setDrawColor(sdl.Color.gray);
         renderer.clear();
+
+        render(&screen, &machine);
 
         {
             var window_size = window.getSize();
@@ -64,6 +86,17 @@ pub fn main() anyerror!void {
         renderer.present();
 
         sdl.delay(1000 / 60);
+    }
+}
+
+fn render(screen: *sdl.Texture, machine: *chip8.Machine) void {
+    var pixels: [*c]u32 = undefined;
+    var pitch: c_int = undefined;
+    if (sdl.c.SDL_LockTexture(screen.ptr, null, @ptrCast([*c]?*anyopaque, &pixels), &pitch) == 0) {
+        for (machine.vram) |m, i| {
+            pixels[i] = if (m > 0) 0xFFFFFFFF else 0x00000000;
+        }
+        sdl.c.SDL_UnlockTexture(screen.ptr);
     }
 }
 
