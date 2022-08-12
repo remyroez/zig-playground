@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const sdl = @import("sdl.zig");
+const chip8 = @import("chip8.zig");
 
 pub fn main() anyerror!void {
     var system = try sdl.System.init(sdl.c.SDL_INIT_VIDEO | sdl.c.SDL_INIT_AUDIO);
@@ -19,7 +20,7 @@ pub fn main() anyerror!void {
     var renderer = try sdl.Renderer.init(window, &.{.auto});
     defer renderer.deinit();
 
-    var screen = try sdl.Texture.init(renderer, sdl.c.SDL_PIXELFORMAT_RGBA8888, .target, 64, 32);
+    var screen = try sdl.Texture.init(renderer, sdl.c.SDL_PIXELFORMAT_RGBA8888, .streaming, 64, 32);
     defer screen.deinit();
 
     var screen_size = sdl.Size{ .w = 64, .h = 32 };
@@ -30,6 +31,9 @@ pub fn main() anyerror!void {
     renderer.resetTarget();
 
     //var dstrect = sdl.c.SDL_Rect{ .x = 0, .y = 0, .w = 64, .h = 32 };
+
+    var machine: chip8.Machine = .{};
+    machine.init();
 
     mainloop: while (true) {
         while (sdl.pollEvent()) |event| {
