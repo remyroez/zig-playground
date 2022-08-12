@@ -157,6 +157,36 @@ pub const Texture = struct {
     pub fn deinit(self: *Self) void {
         c.SDL_DestroyTexture(self.ptr);
     }
+
+    pub fn Lock(comptime T: type) type {
+        return struct {
+            ptr: *c.SDL_Texture,
+            pixels: [*c]T = undefined,
+            pitch: c_int = undefined,
+
+            const LockSelf = @This();
+
+            pub fn init(texture: *Texture, rect: Rect) !LockSelf {
+                var instance = LockSelf{
+                    .ptr = texture.ptr,
+                };
+                return if (c.SDL_LockTexture(
+                    instance.ptr,
+                    if (rect.isEmpty()) null else &rect.to(),
+                    @ptrCast([*c]?*anyopaque, &instance.pixels),
+                    &instance.pitch
+                ) == 0) instance else error.SdlLockTextureFailed;
+            }
+
+            pub fn deinit(self: *LockSelf) void {
+                c.SDL_UnlockTexture(self.ptr);
+            }
+        };
+    }
+
+    pub fn lock(self: *Self, comptime T: type, rect: Rect) !Lock(T) {
+        return Lock(T).init(self, rect);
+    }
 };
 
 pub const Color = struct {

@@ -20,12 +20,16 @@ pub fn main() anyerror!void {
     var renderer = try sdl.Renderer.init(window, &.{.auto});
     defer renderer.deinit();
 
-    var screen = try sdl.Texture.init(renderer, sdl.c.SDL_PIXELFORMAT_RGBA8888, .streaming, 64, 32);
+    var screen = try sdl.Texture.init(
+        renderer,
+        sdl.c.SDL_PIXELFORMAT_RGBA8888,
+        .streaming,
+        chip8.Machine.width,
+        chip8.Machine.height,
+    );
     defer screen.deinit();
 
-    var screen_size = sdl.Size{ .w = 64, .h = 32 };
-
-    //var dstrect = sdl.c.SDL_Rect{ .x = 0, .y = 0, .w = 64, .h = 32 };
+    var screen_size = sdl.Size{ .w = chip8.Machine.width, .h = chip8.Machine.height };
 
     var machine: chip8.Machine = .{};
     machine.init();
@@ -68,7 +72,7 @@ pub fn main() anyerror!void {
         renderer.setDrawColor(sdl.Color.gray);
         renderer.clear();
 
-        render(&screen, &machine);
+        try render(&screen, &machine);
 
         {
             var window_size = window.getSize();
@@ -89,14 +93,12 @@ pub fn main() anyerror!void {
     }
 }
 
-fn render(screen: *sdl.Texture, machine: *chip8.Machine) void {
-    var pixels: [*c]u32 = undefined;
-    var pitch: c_int = undefined;
-    if (sdl.c.SDL_LockTexture(screen.ptr, null, @ptrCast([*c]?*anyopaque, &pixels), &pitch) == 0) {
-        for (machine.vram) |m, i| {
-            pixels[i] = if (m > 0) 0xFFFFFFFF else 0x00000000;
-        }
-        sdl.c.SDL_UnlockTexture(screen.ptr);
+fn render(screen: *sdl.Texture, machine: *chip8.Machine) !void {
+    var lock = try screen.lock(u32, .{});
+    defer lock.deinit();
+
+    for (machine.vram) |m, i| {
+        lock.pixels[i] = if (m > 0) 0xFFFFFFFF else 0x00000000;
     }
 }
 

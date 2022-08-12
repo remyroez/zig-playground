@@ -1,8 +1,8 @@
 const std = @import("std");
 
 pub const Machine = struct {
-    const width = 64;
-    const height = 32;
+    pub const width = 64;
+    pub const height = 32;
 
     ram: [4096]u8 = undefined,
     v: [16]u8 = undefined,
