@@ -30,7 +30,7 @@ pub fn main() anyerror!void {
     var machine: chip8.Machine = .{};
     machine.init();
 
-    var code = @embedFile("roms/demos/Particle Demo [zeroZshadow, 2008].ch8");
+    var code = @embedFile("IBM Logo.ch8");
     machine.load(code);
 
     var keyboard = sdl.Keyboard{};

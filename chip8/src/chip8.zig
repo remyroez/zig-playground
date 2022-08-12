@@ -126,7 +126,7 @@ pub const Machine = struct {
 
         var opcode = Opcode.init(self.ram[self.pc], self.ram[self.pc + 1]);
 
-        std.log.info("{x}: {x}", .{self.pc, opcode.value});
+        //std.log.info("{x}: {x}", .{self.pc, opcode.value});
 
         switch (opcode.at(3)) {
             0x0 => {
